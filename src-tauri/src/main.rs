@@ -153,6 +153,30 @@ fn schedule_size_save(app: AppHandle, label: String, win: WebviewWindow) {
     }
 }
 
+fn reset_cache(app: &AppHandle) -> Result<(), Error> {
+    if let Some(state) = app.try_state::<AppState>() {
+        // Cancel pending saves to avoid rewriting the file after deletion.
+        for (_label, handle) in state.pending_save.lock().drain() {
+            handle.abort();
+        }
+        *state.settings.lock() = PersistedState::default();
+        state.aspect_ratio.lock().clear();
+        state.adjusting_resize.lock().clear();
+        state.selections.lock().clear();
+        state.last_focused_window.lock().take();
+    }
+    if let Ok(path) = config_path(app) {
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+    }
+    for (_, window) in app.webview_windows() {
+        let _ = window.close();
+    }
+    app.exit(0);
+    Ok(())
+}
+
 fn focused_window(app: &AppHandle) -> Option<WebviewWindow> {
     let mut focused: Option<WebviewWindow> = None;
     for (_label, window) in app.webview_windows() {
@@ -270,6 +294,13 @@ fn navigate_selection(app: &AppHandle, window: &WebviewWindow, delta: isize) -> 
         }
     }
     None
+}
+
+#[tauri::command]
+fn start_window_drag(window: WebviewWindow) -> Result<(), String> {
+    window
+        .start_dragging()
+        .map_err(|e| format!("failed to start drag: {e}"))
 }
 
 fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last_file: bool) {
@@ -603,6 +634,7 @@ fn spawn_new_window_with_files(app: &AppHandle, files: Vec<String>) -> Option<St
     .title("Always On Top")
     .visible(true)
     .resizable(true)
+    .decorations(false)
     .inner_size(400.0, 400.0)
     .build()
     .ok()?;
@@ -651,6 +683,15 @@ fn main() {
                             "Cmd+W"
                         } else {
                             "Ctrl+W"
+                        })
+                        .build(&app_handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("reset_cache", "Reset Cache")
+                        .accelerator(if cfg!(target_os = "macos") {
+                            "Cmd+Shift+Backspace"
+                        } else {
+                            "Ctrl+Shift+Backspace"
                         })
                         .build(&app_handle)?,
                 )
@@ -746,6 +787,11 @@ fn main() {
                     let _ = win.close();
                 }
             }
+            "reset_cache" => {
+                if let Err(err) = reset_cache(app) {
+                    eprintln!("reset cache failed: {err}");
+                }
+            }
             "quit" => {
                 if let Some(state) = app.try_state::<AppState>() {
                     if let Some(label) = state.last_focused_window.lock().clone() {
@@ -810,7 +856,8 @@ fn main() {
             set_settings,
             load_image_data,
             previous_file,
-            next_file
+            next_file,
+            start_window_drag
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
