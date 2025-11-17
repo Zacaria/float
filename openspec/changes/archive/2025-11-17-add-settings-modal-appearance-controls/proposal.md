@@ -1,5 +1,7 @@
 # Proposal: Add settings modal appearance controls
 
+**Status:** Failed/abandoned on 2025-11-17 after rollback (broke main app flow).
+
 ## Change ID
 add-settings-modal-appearance-controls
 

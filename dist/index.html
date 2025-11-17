@@ -7,20 +7,33 @@
     <title>Always On Top</title>
     <style>
       html, body { height: 100%; margin: 0; font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; background: #111; color: #ccc; }
-      #app { height: 100%; width: 100%; }
+      #app { height: 100%; width: 100%; position: relative; }
       .image-container { height: 100%; width: 100%; display: grid; place-items: center; background: #111; }
       .image-container img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
       .image-container.placeholder img { display: none; }
       .image-container:not(.placeholder) img { display: block; }
       .image-container:not(.placeholder) .placeholder-text { display: none; }
       .placeholder-text { color: #888; font-size: 14px; text-align: center; padding: 12px; }
+      .hud { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; pointer-events: none; }
+      .hud .info { background: rgba(0,0,0,0.55); padding: 6px 10px; border-radius: 8px; font-size: 13px; color: #eee; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .controls { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+      .btn { pointer-events: auto; background: rgba(255,255,255,0.08); color: #eee; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+      .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     </style>
   </head>
   <body>
     <div id="app">
+      <div class="hud">
+        <div class="info" id="fileInfo">No file selected</div>
+        <div class="info" id="status"></div>
+      </div>
       <div id="imageContainer" class="image-container placeholder">
         <img id="image" alt="Selected file preview" />
         <div id="placeholder" class="placeholder-text">No file selected</div>
+      </div>
+      <div class="controls">
+        <button id="prevBtn" class="btn" type="button">Previous</button>
+        <button id="nextBtn" class="btn" type="button">Next</button>
       </div>
     </div>
     <script>
@@ -34,11 +47,19 @@
       const imageContainer = document.getElementById('imageContainer');
       const imageEl = document.getElementById('image');
       const placeholderEl = document.getElementById('placeholder');
+      const fileInfoEl = document.getElementById('fileInfo');
+      const statusEl = document.getElementById('status');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
 
       const showPlaceholder = (message = 'No file selected') => {
         imageContainer.classList.add('placeholder');
         placeholderEl.textContent = message;
         imageEl.src = '';
+        fileInfoEl.textContent = message;
+        statusEl.textContent = '';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
       };
 
       const buildSources = (path) => {
@@ -83,6 +104,7 @@
         }
         const sources = buildSources(path);
         for (let i = 0; i < sources.length; i += 1) {
+          // eslint-disable-next-line no-await-in-loop
           const ok = await trySource(sources[i]);
           if (ok) return;
         }
@@ -96,35 +118,68 @@
         showPlaceholder('Image unavailable');
       };
 
+      const renderState = (payload) => {
+        const path = payload?.path;
+        const index = payload?.index ?? null;
+        const total = payload?.total ?? null;
+        if (!path) {
+            showPlaceholder();
+            return;
+        }
+        const fileName = path.split(/[\\/]/).pop() || path;
+        fileInfoEl.textContent = fileName;
+        if (typeof index === 'number' && typeof total === 'number' && total > 0) {
+          statusEl.textContent = `File ${index + 1} of ${total}`;
+          prevBtn.disabled = index <= 0;
+          nextBtn.disabled = index >= total - 1;
+        } else {
+          statusEl.textContent = '';
+          prevBtn.disabled = false;
+          nextBtn.disabled = false;
+        }
+        showImage(path);
+      };
+
       const bootstrap = async () => {
         try {
           const settings = await invoke('get_settings');
           if (settings?.last_file) {
-            await showImage(settings.last_file);
-          } else {
-            showPlaceholder();
+            renderState({ path: settings.last_file });
+            return;
           }
-        } catch (_) {
-          showPlaceholder();
+        } catch (err) {
+          console.warn('Failed to load settings', err);
         }
+        showPlaceholder();
       };
 
       bootstrap();
 
-      if (tauri?.event?.listen) {
-        tauri.event
-          .listen('file-selected', async (event) => {
-            const path = event?.payload?.path ?? event?.payload ?? null;
-            if (path) {
-              await showImage(path);
-            } else {
-              showPlaceholder();
-            }
-          })
-          .catch((err) => console.warn('Failed to register file-selected listener', err));
-      } else {
-        console.warn('Tauri event API unavailable; UI will not live-update on selection.');
-      }
+      const registerListeners = () => {
+        if (tauri?.event?.listen) {
+          tauri.event
+            .listen('active-file-changed', async (event) => {
+              renderState(event?.payload);
+            })
+            .catch((err) => console.warn('Failed to register active-file listener', err));
+          tauri.event
+            .listen('file-selected', async (event) => {
+              // Backward compatibility fallback
+              const payload = event?.payload;
+              if (payload?.path || typeof payload === 'string') {
+                renderState({ path: payload.path || payload });
+              }
+            })
+            .catch((err) => console.warn('Failed to register file-selected listener', err));
+        } else {
+          console.warn('Tauri event API unavailable; UI will not live-update on selection.');
+        }
+      };
+
+      registerListeners();
+
+      prevBtn.addEventListener('click', () => invoke('previous_file'));
+      nextBtn.addEventListener('click', () => invoke('next_file'));
     </script>
   </body>
-  </html>
+</html>

@@ -4,30 +4,38 @@ use base64::{engine::general_purpose, Engine};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::{HashMap, HashSet},
     fs,
     path::PathBuf,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::AtomicUsize,
     time::Duration,
 };
 use tauri::menu::{
     CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
 };
-use tauri::{async_runtime, AppHandle, Emitter, Manager, WebviewWindow, WindowEvent, Wry};
+use tauri::{async_runtime, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WindowEvent, Wry};
 use tauri_plugin_dialog::DialogExt;
 use tokio::time::sleep;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct PersistedState {
     last_file: Option<String>,
-    fit_window: bool,
     aspect_lock: bool,
     window_w: Option<f64>,
     window_h: Option<f64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
-struct FileSelectedPayload {
+struct ActiveFilePayload {
     path: Option<String>,
+    index: Option<usize>,
+    total: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+struct SelectionState {
+    files: Vec<String>,
+    active: usize,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -40,19 +48,49 @@ enum Error {
     Serde(#[from] serde_json::Error),
 }
 
-#[derive(Default)]
 struct AppState {
-    // Cached settings in memory
     settings: Mutex<PersistedState>,
-    // Current aspect ratio (w / h) based on last selected image
-    aspect_ratio: Mutex<Option<f64>>,
-    // Guard to avoid resize recursion when enforcing aspect lock
-    adjusting_resize: AtomicBool,
-    // Menu toggle handles for syncing check states
-    fit_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
+    aspect_ratio: Mutex<HashMap<String, f64>>, // per-window aspect ratio
+    adjusting_resize: Mutex<HashSet<String>>,   // per-window resize guard
     aspect_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
-    // Debounced save handle for window size persistence
-    pending_save: Mutex<Option<async_runtime::JoinHandle<()>>>,
+    pending_save: Mutex<HashMap<String, async_runtime::JoinHandle<()>>>,
+    selections: Mutex<HashMap<String, SelectionState>>, // per-window selections
+    last_focused_window: Mutex<Option<String>>,         // label of last focused window
+    window_counter: AtomicUsize,
+}
+
+fn is_image_path(path: &str) -> bool {
+    let ext = PathBuf::from(path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase());
+    matches!(
+        ext.as_deref(),
+        Some("png")
+            | Some("jpg")
+            | Some("jpeg")
+            | Some("gif")
+            | Some("webp")
+            | Some("bmp")
+            | Some("tif")
+            | Some("tiff")
+            | Some("heic")
+    )
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            settings: Mutex::new(PersistedState::default()),
+            aspect_ratio: Mutex::new(HashMap::new()),
+            adjusting_resize: Mutex::new(HashSet::new()),
+            aspect_toggle: Mutex::new(None),
+            pending_save: Mutex::new(HashMap::new()),
+            selections: Mutex::new(HashMap::new()),
+            last_focused_window: Mutex::new(None),
+            window_counter: AtomicUsize::new(0),
+        }
+    }
 }
 
 fn config_path(app: &AppHandle) -> Result<PathBuf, Error> {
@@ -74,10 +112,6 @@ fn load_state(app: &AppHandle) -> PersistedState {
                     return s;
                 }
             }
-        } else {
-            let mut s = PersistedState::default();
-            s.fit_window = true; // default to auto-fit when unset
-            return s;
         }
     }
     PersistedState::default()
@@ -93,89 +127,248 @@ fn save_state(app: &AppHandle, win: &WebviewWindow, mut st: PersistedState) -> R
     Ok(())
 }
 
-#[tauri::command]
-async fn choose_file(app: AppHandle) -> Option<String> {
-    // For automation, allow bypassing the native dialog with a predefined path.
-    if let Ok(test_path) = std::env::var("AOT_TEST_PATH") {
-        dbg!("Using test path: {}", &test_path);
-        if test_path.is_empty() {
-            return None;
+fn schedule_size_save(app: AppHandle, label: String, win: WebviewWindow) {
+    if let Some(state) = app.try_state::<AppState>() {
+        let mut pending = state.pending_save.lock();
+        if let Some(handle) = pending.remove(&label) {
+            handle.abort();
         }
-        return handle_selected_path(app, test_path);
-    }
-
-    // Use Tauri dialog plugin for native file picking; prefer parenting to the main window when present.
-    let picker = if let Some(win) = app.get_webview_window("main") {
-        app.dialog().file().set_parent(&win)
-    } else {
-        app.dialog().file()
-    };
-
-    let picked = picker.blocking_pick_file();
-    dbg!("Picked file: {picked:?}");
-
-    if let Some(file_path) = picked {
-        if let Ok(path) = file_path.into_path() {
-            let path_str = path.to_string_lossy().to_string();
-            dbg!("Selected path: {}", &path_str);
-            handle_selected_path(app, path_str)
-        } else {
-            None
-        }
-    } else {
-        None
+        let app_for_task = app.clone();
+        let win_for_task = win.clone();
+        let label_for_task = label.clone();
+        let handle = async_runtime::spawn(async move {
+            sleep(Duration::from_millis(500)).await;
+            if let Some(state) = app_for_task.try_state::<AppState>() {
+                let st = state.settings.lock().clone();
+                let _ = save_state(&app_for_task, &win_for_task, st);
+            } else {
+                let st = load_state(&app_for_task);
+                let _ = save_state(&app_for_task, &win_for_task, st);
+            }
+            if let Some(state) = app_for_task.try_state::<AppState>() {
+                state.pending_save.lock().remove(&label_for_task);
+            }
+        });
+        pending.insert(label, handle);
     }
 }
 
-fn handle_selected_path(app: AppHandle, path_str: String) -> Option<String> {
-    let path = PathBuf::from(&path_str);
-    // Update title
-    if let Some(win) = app.get_webview_window("main") {
-        if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-            let _ = win.set_title(&format!("Always On Top — {}", name));
+fn focused_window(app: &AppHandle) -> Option<WebviewWindow> {
+    let mut focused: Option<WebviewWindow> = None;
+    for (_label, window) in app.webview_windows() {
+        if let Ok(true) = window.is_focused() {
+            focused = Some(window);
+            break;
         }
     }
-    // Cache aspect ratio
+    focused.or_else(|| app.get_webview_window("main"))
+}
+
+fn active_file_for_window(app: &AppHandle, label: &str) -> Option<String> {
+    if let Some(state) = app.try_state::<AppState>() {
+        let selections = state.selections.lock();
+        if let Some(sel) = selections.get(label) {
+            return sel.files.get(sel.active).cloned();
+        }
+    }
+    None
+}
+
+fn emit_active_file(window: &WebviewWindow, payload: ActiveFilePayload) {
+    let _ = window.emit("active-file-changed", payload.clone());
+    // Backward compatibility with the previous event name
+    let _ = window.emit("file-selected", ActiveFilePayload { path: payload.path.clone(), index: None, total: None });
+}
+
+fn apply_active_file(app: &AppHandle, window: &WebviewWindow, selection: &SelectionState) -> Option<String> {
+    let path_str = selection.files.get(selection.active)?.clone();
+    if !is_image_path(&path_str) {
+        return None;
+    }
+    let path = PathBuf::from(&path_str);
+    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+        let _ = window.set_title(&format!("Always On Top — {}", name));
+    }
+
+    // Cache aspect ratio per window
     if let Ok((w, h)) = image::image_dimensions(&path) {
         if h > 0 {
             if let Some(state) = app.try_state::<AppState>() {
-                *state.aspect_ratio.lock() = Some(w as f64 / h as f64);
+                state
+                    .aspect_ratio
+                    .lock()
+                    .insert(window.label().to_string(), w as f64 / h as f64);
             }
         }
     }
-    // Persist settings and auto-fit if enabled
-    if let Some(win) = app.get_webview_window("main") {
-        let fit_enabled;
-        if let Some(state) = app.try_state::<AppState>() {
-            let mut s = state.settings.lock().clone();
-            fit_enabled = s.fit_window;
-            s.last_file = Some(path_str.clone());
-            let _ = save_state(&app, &win, s.clone());
-            *state.settings.lock() = s;
-        } else {
-            let mut st = load_state(&app);
-            fit_enabled = st.fit_window;
-            st.last_file = Some(path_str.clone());
-            let _ = save_state(&app, &win, st);
-        }
-        if fit_enabled {
-            let _ = fit_now(app.clone(), win.clone());
-        }
+
+    // Persist active file and window size
+    if let Some(state) = app.try_state::<AppState>() {
+        let mut st = state.settings.lock().clone();
+        st.last_file = Some(path_str.clone());
+        let _ = save_state(app, window, st.clone());
+        *state.settings.lock() = st;
+    } else {
+        let mut st = load_state(app);
+        st.last_file = Some(path_str.clone());
+        let _ = save_state(app, window, st.clone());
     }
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.emit(
-            "file-selected",
-            FileSelectedPayload {
-                path: Some(path_str.clone()),
+
+    emit_active_file(
+        window,
+        ActiveFilePayload {
+            path: Some(path_str.clone()),
+            index: Some(selection.active),
+            total: Some(selection.files.len()),
+        },
+    );
+
+    Some(path_str)
+}
+
+fn apply_selection(app: &AppHandle, window: &WebviewWindow, files: Vec<String>) -> Option<String> {
+    let files: Vec<String> = files
+        .into_iter()
+        .filter(|p| is_image_path(p))
+        .collect();
+    if files.is_empty() {
+        emit_active_file(
+            window,
+            ActiveFilePayload {
+                path: None,
+                index: None,
+                total: Some(0),
             },
         );
-        let _ = win.eval("window.location.reload()");
+        return None;
     }
-    Some(path_str)
+    let selection = SelectionState { files, active: 0 };
+    if let Some(state) = app.try_state::<AppState>() {
+        state
+            .selections
+            .lock()
+            .insert(window.label().to_string(), selection.clone());
+    }
+    apply_active_file(app, window, &selection)
+}
+
+fn navigate_selection(app: &AppHandle, window: &WebviewWindow, delta: isize) -> Option<String> {
+    if let Some(state) = app.try_state::<AppState>() {
+        let mut selections = state.selections.lock();
+        if let Some(sel) = selections.get_mut(window.label()) {
+            let len = sel.files.len();
+            if len == 0 {
+                return None;
+            }
+            let current = sel.active as isize;
+            let next = current.saturating_add(delta);
+            let bounded = next.clamp(0, (len as isize) - 1) as usize;
+            if bounded != sel.active {
+                sel.active = bounded;
+                return apply_active_file(app, window, sel);
+            }
+        }
+    }
+    None
+}
+
+fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last_file: bool) {
+    let _ = window.set_always_on_top(true);
+
+    let st = load_state(app);
+    if let (Some(w), Some(h)) = (st.window_w, st.window_h) {
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+            width: w,
+            height: h,
+        }));
+    }
+
+    if load_last_file {
+        if let Some(p) = st.last_file.clone() {
+            if is_image_path(&p) && PathBuf::from(&p).exists() {
+                let _ = apply_selection(app, window, vec![p]);
+            }
+        }
+    }
+}
+
+fn wire_window_events(app_handle: &AppHandle, window: &WebviewWindow) {
+    let label = window.label().to_string();
+    let app_for_event = app_handle.clone();
+    window.on_window_event(move |e| match e {
+        WindowEvent::Resized(size) => {
+            if let Some(state) = app_for_event.try_state::<AppState>() {
+                let mut adjusting = state.adjusting_resize.lock();
+                if adjusting.contains(&label) {
+                    return;
+                }
+                let st = state.settings.lock().clone();
+                if st.aspect_lock {
+                    if let Some(r) = state.aspect_ratio.lock().get(&label).copied() {
+                        if r.is_finite() && r > 0.0 {
+                            let new_w = size.width as f64;
+                            let new_h = (new_w / r).round().max(1.0);
+                            adjusting.insert(label.clone());
+                            if let Some(win) = app_for_event.get_webview_window(&label) {
+                                let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                                    width: new_w,
+                                    height: new_h,
+                                }));
+                            }
+                            adjusting.remove(&label);
+                        }
+                    }
+                }
+                if let Some(win) = app_for_event.get_webview_window(&label) {
+                    schedule_size_save(app_for_event.clone(), label.clone(), win);
+                }
+            }
+        }
+        WindowEvent::Focused(true) => {
+            if let Some(state) = app_for_event.try_state::<AppState>() {
+                *state.last_focused_window.lock() = Some(label.clone());
+            }
+            if let Some(win) = app_for_event.get_webview_window(&label) {
+                if let Some(path) = active_file_for_window(&app_for_event, &label) {
+                    if let Some(state) = app_for_event.try_state::<AppState>() {
+                        let mut st = state.settings.lock().clone();
+                        st.last_file = Some(path);
+                        let _ = save_state(&app_for_event, &win, st.clone());
+                        *state.settings.lock() = st;
+                    }
+                }
+            }
+        }
+        _ => {}
+    });
+}
+
+#[tauri::command]
+async fn choose_file(app: AppHandle) -> Option<String> {
+    pick_and_apply_selection(app, SelectionTarget::CurrentWindow)
+}
+
+#[tauri::command]
+fn previous_file(app: AppHandle) -> Option<String> {
+    if let Some(win) = focused_window(&app) {
+        return navigate_selection(&app, &win, -1);
+    }
+    None
+}
+
+#[tauri::command]
+fn next_file(app: AppHandle) -> Option<String> {
+    if let Some(win) = focused_window(&app) {
+        return navigate_selection(&app, &win, 1);
+    }
+    None
 }
 
 #[tauri::command]
 fn load_image_data(path: String) -> Result<String, String> {
+    if !is_image_path(&path) {
+        return Err("unsupported file type".into());
+    }
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() {
         return Err("file does not exist".into());
@@ -199,37 +392,67 @@ fn load_image_data(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn fit_now(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
-    // Read last_file, if present get image dimensions and resize window.
-    // Prefer in-memory settings for freshness
-    let st = if let Some(state) = app.try_state::<AppState>() {
-        state.settings.lock().clone()
-    } else {
-        load_state(&app)
-    };
-    let path = match st.last_file {
-        Some(p) => PathBuf::from(p),
+    let path = active_file_for_window(&app, window.label())
+        .map(PathBuf::from)
+        .or_else(|| {
+            let st = if let Some(state) = app.try_state::<AppState>() {
+                state.settings.lock().clone()
+            } else {
+                load_state(&app)
+            };
+            st.last_file.map(PathBuf::from)
+        });
+
+    let path = match path {
+        Some(p) => p,
         None => return Ok(()),
     };
+
     let img = image::image_dimensions(&path)
         .map_err(|e| format!("failed to read image dimensions: {e}"))?;
-    let (w, h) = (img.0 as f64, img.1 as f64);
-    // Clamp to a reasonable maximum (e.g., 90% of current screen working area).
-    if let Ok(monitor) = window.current_monitor() {
-        if let Some(m) = monitor {
-            let size = m.size();
-            let max_w = (size.width as f64 * 0.9).max(200.0);
-            let max_h = (size.height as f64 * 0.9).max(200.0);
-            let scale = (max_w / w).min(max_h / h).min(1.0);
-            let new_w = (w * scale).round() as u32;
-            let new_h = (h * scale).round() as u32;
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                width: new_w as f64,
-                height: new_h as f64,
-            }));
-            // Update aspect ratio cache
-            if let Some(state) = app.try_state::<AppState>() {
-                *state.aspect_ratio.lock() = Some(w / h);
+    let (img_w, img_h) = (img.0 as f64, img.1 as f64);
+    if img_w <= 0.0 || img_h <= 0.0 {
+        return Ok(());
+    }
+    let aspect = img_w / img_h;
+
+    // Anchor on the current larger window dimension and adjust the other down to match aspect.
+    if let Ok(size) = window.outer_size() {
+        let cur_w = size.width as f64;
+        let cur_h = size.height as f64;
+        let min_dim = 50.0_f64;
+        let (mut new_w, mut new_h) = if cur_w >= cur_h {
+            let mut target_w = cur_w;
+            let mut target_h = target_w / aspect;
+            if target_h > cur_h && target_h > 0.0 {
+                let scale = cur_h / target_h;
+                target_w *= scale;
+                target_h = cur_h;
             }
+            (target_w, target_h)
+        } else {
+            let mut target_h = cur_h;
+            let mut target_w = target_h * aspect;
+            if target_w > cur_w && target_w > 0.0 {
+                let scale = cur_w / target_w;
+                target_h *= scale;
+                target_w = cur_w;
+            }
+            (target_w, target_h)
+        };
+
+        new_w = new_w.max(min_dim);
+        new_h = new_h.max(min_dim);
+
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+            width: new_w,
+            height: new_h,
+        }));
+        if let Some(state) = app.try_state::<AppState>() {
+            state
+                .aspect_ratio
+                .lock()
+                .insert(window.label().to_string(), aspect);
         }
     }
     Ok(())
@@ -248,40 +471,6 @@ fn quick_look(_app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow) {
-    // Always-on-top
-    let _ = window.set_always_on_top(true);
-
-    // Restore last size
-    let st = load_state(app);
-    if let (Some(w), Some(h)) = (st.window_w, st.window_h) {
-        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-            width: w,
-            height: h,
-        }));
-    }
-
-    // Title reflects last file if present
-    if let Some(p) = st.last_file.clone() {
-        let path = PathBuf::from(p);
-        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        let _ = window.set_title(&format!("Always On Top — {}", name));
-        // Initialize aspect ratio cache
-        if let Ok((w, h)) = image::image_dimensions(&path) {
-            if h > 0 {
-                if let Some(state) = app.try_state::<AppState>() {
-                    *state.aspect_ratio.lock() = Some(w as f64 / h as f64);
-                }
-            }
-        }
-    }
-
-    // Auto-fit on startup if enabled and last file exists
-    if st.fit_window && st.last_file.is_some() {
-        let _ = fit_now(app.clone(), window.clone());
-    }
-}
-
 #[tauri::command]
 fn get_settings(app: AppHandle) -> PersistedState {
     if let Some(state) = app.try_state::<AppState>() {
@@ -293,28 +482,17 @@ fn get_settings(app: AppHandle) -> PersistedState {
 
 #[derive(Deserialize)]
 struct SettingsUpdate {
-    fit_window: Option<bool>,
     aspect_lock: Option<bool>,
 }
 
 #[tauri::command]
 fn set_settings(app: AppHandle, update: SettingsUpdate) -> Result<PersistedState, String> {
-    let win = app
-        .get_webview_window("main")
-        .ok_or("missing main window")?;
+    let win = focused_window(&app).ok_or("missing window")?;
     let mut st = if let Some(state) = app.try_state::<AppState>() {
         state.settings.lock().clone()
     } else {
         load_state(&app)
     };
-    if let Some(v) = update.fit_window {
-        st.fit_window = v;
-        if let Some(state) = app.try_state::<AppState>() {
-            if let Some(toggle) = state.fit_toggle.lock().clone() {
-                let _ = toggle.set_checked(v);
-            }
-        }
-    }
     if let Some(v) = update.aspect_lock {
         st.aspect_lock = v;
         if let Some(state) = app.try_state::<AppState>() {
@@ -330,26 +508,114 @@ fn set_settings(app: AppHandle, update: SettingsUpdate) -> Result<PersistedState
     Ok(st)
 }
 
-fn schedule_size_save(app: AppHandle, win: WebviewWindow) {
-    if let Some(state) = app.try_state::<AppState>() {
-        let mut pending = state.pending_save.lock();
-        if let Some(handle) = pending.take() {
-            handle.abort();
+enum SelectionTarget {
+    CurrentWindow,
+    NewWindow,
+}
+
+fn pick_files(app: &AppHandle, parent: Option<&WebviewWindow>) -> Vec<String> {
+    let make_picker = || {
+        if let Some(win) = parent {
+            app.dialog().file().set_parent(win)
+        } else {
+            app.dialog().file()
         }
-        let app_for_task = app.clone();
-        let win_for_task = win.clone();
-        let handle = async_runtime::spawn(async move {
-            sleep(Duration::from_millis(1000)).await;
-            if let Some(state) = app_for_task.try_state::<AppState>() {
-                let st = state.settings.lock().clone();
-                let _ = save_state(&app_for_task, &win_for_task, st);
-            } else {
-                let st = load_state(&app_for_task);
-                let _ = save_state(&app_for_task, &win_for_task, st);
+    };
+
+    let mut paths = Vec::new();
+    if let Some(files) = make_picker().blocking_pick_files() {
+        for file in files {
+            if let Ok(path) = file.into_path() {
+                let path_str = path.to_string_lossy().to_string();
+                if is_image_path(&path_str) {
+                    paths.push(path_str);
+                }
             }
-        });
-        *pending = Some(handle);
+        }
     }
+
+    if paths.is_empty() {
+        if let Some(file) = make_picker().blocking_pick_file() {
+            if let Ok(path) = file.into_path() {
+                let path_str = path.to_string_lossy().to_string();
+                if is_image_path(&path_str) {
+                    return vec![path_str];
+                }
+            }
+        }
+    }
+
+    paths
+}
+
+fn pick_and_apply_selection(app: AppHandle, target: SelectionTarget) -> Option<String> {
+    // For automation, allow bypassing the native dialog with a predefined path.
+    if let Ok(test_path) = std::env::var("AOT_TEST_PATH") {
+        if test_path.is_empty() {
+            return None;
+        }
+        match target {
+            SelectionTarget::CurrentWindow => {
+                if let Some(win) = focused_window(&app) {
+                    return apply_selection(&app, &win, vec![test_path]);
+                }
+            }
+            SelectionTarget::NewWindow => {
+                return spawn_new_window_with_files(&app, vec![test_path]);
+            }
+        }
+    }
+
+    let focus = focused_window(&app);
+    let parent = focus.as_ref();
+    let files = pick_files(&app, parent);
+    if files.is_empty() {
+        return None;
+    }
+
+    match target {
+        SelectionTarget::CurrentWindow => {
+            if let Some(win) = focus.or_else(|| app.get_webview_window("main")) {
+                apply_selection(&app, &win, files)
+            } else {
+                None
+            }
+        }
+        SelectionTarget::NewWindow => spawn_new_window_with_files(&app, files),
+    }
+}
+
+fn spawn_new_window_with_files(app: &AppHandle, files: Vec<String>) -> Option<String> {
+    if files.is_empty() {
+        return None;
+    }
+    let counter = if let Some(state) = app.try_state::<AppState>() {
+        state.window_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
+    } else {
+        1
+    };
+    let label = format!("window-{counter}");
+    let window = tauri::WebviewWindowBuilder::new(
+        app,
+        &label,
+        WebviewUrl::App("index.html".into()),
+    )
+    .title("Always On Top")
+    .visible(true)
+    .resizable(true)
+    .inner_size(400.0, 400.0)
+    .build()
+    .ok()?;
+
+    apply_initial_window_state(app, &window, false);
+    wire_window_events(app, &window);
+    if let Some(state) = app.try_state::<AppState>() {
+        state
+            .last_focused_window
+            .lock()
+            .replace(window.label().to_string());
+    }
+    apply_selection(app, &window, files)
 }
 
 fn main() {
@@ -362,6 +628,15 @@ fn main() {
             // Build native menu with platform shortcuts and toggles.
             let file_menu = SubmenuBuilder::new(&app_handle, "File")
                 .item(
+                    &MenuItemBuilder::with_id("new_window", "New Window…")
+                        .accelerator(if cfg!(target_os = "macos") {
+                            "Cmd+T"
+                        } else {
+                            "Ctrl+T"
+                        })
+                        .build(&app_handle)?,
+                )
+                .item(
                     &MenuItemBuilder::with_id("open", "Open…")
                         .accelerator(if cfg!(target_os = "macos") {
                             "Cmd+O"
@@ -370,15 +645,29 @@ fn main() {
                         })
                         .build(&app_handle)?,
                 )
+                .item(
+                    &MenuItemBuilder::with_id("close_window", "Close Window")
+                        .accelerator(if cfg!(target_os = "macos") {
+                            "Cmd+W"
+                        } else {
+                            "Ctrl+W"
+                        })
+                        .build(&app_handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("quit", "Quit")
+                        .accelerator(if cfg!(target_os = "macos") {
+                            "Cmd+Q"
+                        } else {
+                            "Ctrl+Q"
+                        })
+                        .build(&app_handle)?,
+                )
                 .build()?;
-            let st_for_menu = load_state(&app_handle);
-            let fit_toggle =
-                CheckMenuItemBuilder::with_id("fit_window_toggle", "Auto-fit on selection")
-                    .checked(st_for_menu.fit_window)
-                    .build(&app_handle)?;
+
             let aspect_toggle =
                 CheckMenuItemBuilder::with_id("aspect_lock_toggle", "Lock aspect ratio on resize")
-                    .checked(st_for_menu.aspect_lock)
+                    .checked(load_state(&app_handle).aspect_lock)
                     .build(&app_handle)?;
             let mut view_menu = SubmenuBuilder::new(&app_handle, "View")
                 .item(
@@ -390,17 +679,25 @@ fn main() {
                         })
                         .build(&app_handle)?,
                 )
-                .item(&fit_toggle)
+                .item(
+                    &MenuItemBuilder::with_id("previous_file", "Previous File")
+                        .accelerator(if cfg!(target_os = "macos") {
+                            "Alt+Cmd+["
+                        } else {
+                            "Ctrl+["
+                        })
+                        .build(&app_handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("next_file", "Next File")
+                        .accelerator(if cfg!(target_os = "macos") {
+                            "Alt+Cmd+]"
+                        } else {
+                            "Ctrl+]"
+                        })
+                        .build(&app_handle)?,
+                )
                 .item(&aspect_toggle);
-            view_menu = view_menu.item(
-                &MenuItemBuilder::with_id("inspect", "Toggle Inspector")
-                    .accelerator(if cfg!(target_os = "macos") {
-                        "Alt+Cmd+I"
-                    } else {
-                        "Ctrl+Shift+I"
-                    })
-                    .build(&app_handle)?,
-            );
             #[cfg(target_os = "macos")]
             {
                 view_menu = view_menu.item(
@@ -415,53 +712,20 @@ fn main() {
                 .build()?;
             app.set_menu(app_menu)?;
             if let Some(state) = app_handle.try_state::<AppState>() {
-                *state.fit_toggle.lock() = Some(fit_toggle.clone());
                 *state.aspect_toggle.lock() = Some(aspect_toggle.clone());
             }
 
-            // Initialize in-memory settings before applying window state
             if let Some(state) = app_handle.try_state::<AppState>() {
                 *state.settings.lock() = load_state(&app_handle);
+                state.window_counter.store(1, std::sync::atomic::Ordering::SeqCst);
             }
-            // Apply initial window state when ready
+
             let win = app_handle
                 .get_webview_window("main")
                 .expect("main window exists");
-            apply_initial_window_state(&app_handle, &win);
+            apply_initial_window_state(&app_handle, &win, true);
+            wire_window_events(&app_handle, &win);
 
-            // Persist on resize
-            win.on_window_event(move |e| {
-                if let WindowEvent::Resized(size) = e {
-                    let win = app_handle.get_webview_window("main").unwrap();
-                    // Enforce aspect lock if enabled
-                    if let Some(state) = app_handle.try_state::<AppState>() {
-                        if state.adjusting_resize.load(Ordering::Relaxed) {
-                            return;
-                        }
-                        let st = state.settings.lock().clone();
-                        if st.aspect_lock {
-                            if let Some(r) = *state.aspect_ratio.lock() {
-                                if r.is_finite() && r > 0.0 {
-                                    // Width drives; compute height = width / r
-                                    let new_w = size.width as f64;
-                                    let new_h = (new_w / r).round().max(1.0);
-                                    state.adjusting_resize.store(true, Ordering::Relaxed);
-                                    let _ =
-                                        win.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                                            width: new_w,
-                                            height: new_h,
-                                        }));
-                                    state.adjusting_resize.store(false, Ordering::Relaxed);
-                                }
-                            }
-                        }
-                        // Debounced persist of latest window size (respecting any adjustment)
-                        schedule_size_save(app_handle.clone(), win.clone());
-                    } else {
-                        schedule_size_save(app_handle.clone(), win.clone());
-                    }
-                }
-            });
             Ok(())
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -471,34 +735,49 @@ fn main() {
                     let _ = choose_file(handle).await;
                 });
             }
+            "new_window" => {
+                let handle = app.clone();
+                async_runtime::spawn(async move {
+                    let _ = pick_and_apply_selection(handle, SelectionTarget::NewWindow);
+                });
+            }
+            "close_window" => {
+                if let Some(win) = focused_window(app) {
+                    let _ = win.close();
+                }
+            }
+            "quit" => {
+                if let Some(state) = app.try_state::<AppState>() {
+                    if let Some(label) = state.last_focused_window.lock().clone() {
+                        if let Some(win) = app.get_webview_window(&label) {
+                            if let Some(path) = active_file_for_window(app, &label) {
+                                let mut st = state.settings.lock().clone();
+                                st.last_file = Some(path);
+                                let _ = save_state(app, &win, st.clone());
+                                *state.settings.lock() = st;
+                            }
+                        }
+                    }
+                }
+                app.exit(0);
+            }
             "fit_now" => {
-                if let Some(win) = app.get_webview_window("main") {
+                if let Some(win) = focused_window(app) {
                     let _ = fit_now(app.clone(), win);
+                }
+            }
+            "previous_file" => {
+                if let Some(win) = focused_window(app) {
+                    let _ = navigate_selection(app, &win, -1);
+                }
+            }
+            "next_file" => {
+                if let Some(win) = focused_window(app) {
+                    let _ = navigate_selection(app, &win, 1);
                 }
             }
             "quick_look" => {
                 let _ = quick_look(app.clone());
-            }
-            "fit_window_toggle" => {
-                if let Some(state) = app.try_state::<AppState>() {
-                    let mut s = state.settings.lock().clone();
-                    let new_state = if let Some(toggle) = state.fit_toggle.lock().clone() {
-                        if let Ok(current) = toggle.is_checked() {
-                            let desired = !current;
-                            let _ = toggle.set_checked(desired);
-                            desired
-                        } else {
-                            !s.fit_window
-                        }
-                    } else {
-                        !s.fit_window
-                    };
-                    s.fit_window = new_state;
-                    if let Some(win) = app.get_webview_window("main") {
-                        let _ = save_state(app, &win, s.clone());
-                    }
-                    *state.settings.lock() = s;
-                }
             }
             "aspect_lock_toggle" => {
                 if let Some(state) = app.try_state::<AppState>() {
@@ -515,15 +794,10 @@ fn main() {
                         !s.aspect_lock
                     };
                     s.aspect_lock = new_state;
-                    if let Some(win) = app.get_webview_window("main") {
+                    if let Some(win) = focused_window(app) {
                         let _ = save_state(app, &win, s.clone());
                     }
                     *state.settings.lock() = s;
-                }
-            }
-            "inspect" => {
-                if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.open_devtools();
                 }
             }
             _ => {}
@@ -534,7 +808,9 @@ fn main() {
             quick_look,
             get_settings,
             set_settings,
-            load_image_data
+            load_image_data,
+            previous_file,
+            next_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

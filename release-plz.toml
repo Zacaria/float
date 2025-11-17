@@ -1,0 +1,7 @@
+[workspace]
+changelog_path = "CHANGELOG.md"
+git_tag_prefix = "v"
+publish = false
+
+[git]
+release = true

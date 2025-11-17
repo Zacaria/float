@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)] // Allow objc macro cfg probes under clippy
+
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -248,90 +250,91 @@ mod macos_menu {
 
 #[cfg(target_os = "macos")]
 mod macos_image {
-    use cocoa::appkit::{NSImage, NSImageView, NSScreen, NSView};
+    use cocoa::appkit::{NSScreen, NSView};
     use cocoa::base::nil;
-    use cocoa::foundation::{NSAutoreleasePool, NSString};
+    use cocoa::foundation::NSString;
     use objc::runtime::Object;
     use objc::{class, msg_send, sel, sel_impl};
+    use once_cell::sync::Lazy;
+    use std::sync::Mutex;
     use winit::platform::macos::WindowExtMacOS;
 
     const IMAGE_TAG: i64 = 4242;
+    static LAST_SIZE: Lazy<Mutex<Option<(f64, f64)>>> = Lazy::new(|| Mutex::new(None));
 
-    unsafe fn get_root_view(window: &winit::window::Window) -> *mut Object {
+    fn get_root_view(window: &winit::window::Window) -> *mut Object {
+        // winit guarantees the NSView pointer is valid for the window lifetime.
         window.ns_view() as *mut Object
     }
 
-    static mut LAST_SIZE: (f64, f64) = (0.0, 0.0);
-
-    pub unsafe fn set_image(
-        window: &winit::window::Window,
-        path: &std::path::Path,
-    ) -> Option<(f64, f64)> {
+    pub fn set_image(window: &winit::window::Window, path: &std::path::Path) -> Option<(f64, f64)> {
         let ns_view = get_root_view(window);
         if ns_view.is_null() {
             return None;
         }
 
         // Create or find the image view.
-        let existing: *mut Object = msg_send![ns_view, viewWithTag: IMAGE_TAG];
-        let image_view: *mut Object = if existing.is_null() {
-            let bounds = NSView::bounds(ns_view);
-            let iv: *mut Object = msg_send![class!(NSImageView), alloc];
-            let iv: *mut Object = msg_send![iv, initWithFrame: bounds];
-            let _: () = msg_send![iv, setTag: IMAGE_TAG];
-            // Scale proportionally up or down (3)
-            let _: () = msg_send![iv, setImageScaling: 3_u64];
-            let _: () = msg_send![ns_view, addSubview: iv];
-            iv
-        } else {
-            existing
+        let image_view: *mut Object = unsafe {
+            let existing: *mut Object = msg_send![ns_view, viewWithTag: IMAGE_TAG];
+            if existing.is_null() {
+                let bounds = NSView::bounds(ns_view);
+                let iv: *mut Object = msg_send![class!(NSImageView), alloc];
+                let iv: *mut Object = msg_send![iv, initWithFrame: bounds];
+                let _: () = msg_send![iv, setTag: IMAGE_TAG];
+                // Scale proportionally up or down (3)
+                let _: () = msg_send![iv, setImageScaling: 3_u64];
+                let _: () = msg_send![ns_view, addSubview: iv];
+                iv
+            } else {
+                existing
+            }
         };
 
         // Load NSImage from file
-        let ns_path = NSString::alloc(nil).init_str(&path.to_string_lossy());
-        let image_cls = class!(NSImage);
-        let img_alloc: *mut Object = msg_send![image_cls, alloc];
-        let ns_image: *mut Object = msg_send![img_alloc, initWithContentsOfFile: ns_path];
-        if ns_image.is_null() {
-            return None;
+        let last_size = unsafe {
+            let ns_path = NSString::alloc(nil).init_str(&path.to_string_lossy());
+            let image_cls = class!(NSImage);
+            let img_alloc: *mut Object = msg_send![image_cls, alloc];
+            let ns_image: *mut Object = msg_send![img_alloc, initWithContentsOfFile: ns_path];
+            if ns_image.is_null() {
+                return None;
+            }
+            let _: () = msg_send![image_view, setImage: ns_image];
+            // Extract image size in points
+            let size: cocoa::foundation::NSSize = msg_send![ns_image, size];
+            (size.width as f64, size.height as f64)
+        };
+
+        if let Ok(mut guard) = LAST_SIZE.lock() {
+            *guard = Some(last_size);
         }
-        let _: () = msg_send![image_view, setImage: ns_image];
-        // Extract image size in points
-        let size: cocoa::foundation::NSSize = msg_send![ns_image, size];
-        LAST_SIZE = (size.width as f64, size.height as f64);
         layout_image_view(window);
-        Some(LAST_SIZE)
+        Some(last_size)
     }
 
-    pub unsafe fn layout_image_view(window: &winit::window::Window) {
+    pub fn layout_image_view(window: &winit::window::Window) {
         let ns_view = get_root_view(window);
         if ns_view.is_null() {
             return;
         }
-        let bounds = NSView::bounds(ns_view);
-        let sub: *mut Object = msg_send![ns_view, viewWithTag: IMAGE_TAG];
+        let bounds = unsafe { NSView::bounds(ns_view) };
+        let sub: *mut Object = unsafe { msg_send![ns_view, viewWithTag: IMAGE_TAG] };
         if !sub.is_null() {
-            let _: () = msg_send![sub, setFrame: bounds];
+            unsafe {
+                let _: () = msg_send![sub, setFrame: bounds];
+            }
         }
     }
 
-    pub unsafe fn last_image_size() -> Option<(f64, f64)> {
-        if LAST_SIZE.0 > 0.0 && LAST_SIZE.1 > 0.0 {
-            Some(LAST_SIZE)
-        } else {
-            None
-        }
+    pub fn last_image_size() -> Option<(f64, f64)> {
+        LAST_SIZE.lock().ok().and_then(|g| (*g).as_ref().copied())
     }
 
-    pub unsafe fn clamp_to_screen(
-        window: &winit::window::Window,
-        mut w: f64,
-        mut h: f64,
-    ) -> (f64, f64) {
+    pub fn clamp_to_screen(mut w: f64, mut h: f64) -> (f64, f64) {
         // Use main screen visible frame as a simple bound.
-        let screen = NSScreen::mainScreen(nil);
+        let screen = unsafe { NSScreen::mainScreen(nil) };
         if !screen.is_null() {
-            let frame: cocoa::foundation::NSRect = msg_send![screen, visibleFrame];
+            let frame: cocoa::foundation::NSRect = unsafe { msg_send![screen, visibleFrame] };
             let max_w = frame.size.width as f64 * 0.9;
             let max_h = frame.size.height as f64 * 0.9;
             let scale_w = max_w / w;
@@ -348,123 +351,120 @@ mod macos_image {
 mod macos_settings {
     use super::macos_menu::get_handler_instance;
     use super::{UserEvent, EVENT_PROXY, SETTINGS};
-    use cocoa::appkit::{NSButton, NSView};
     use cocoa::base::nil;
     use cocoa::foundation::{NSPoint, NSRect, NSSize, NSString};
     use objc::runtime::Object;
     use objc::{class, msg_send, sel, sel_impl};
 
-    pub unsafe fn show_settings_modal() {
-        let alert: *mut Object = msg_send![class!(NSAlert), new];
-        let title = NSString::alloc(nil).init_str("Settings");
-        let _: () = msg_send![alert, setMessageText: title];
-        let ok = NSString::alloc(nil).init_str("OK");
-        let _: *mut Object = msg_send![alert, addButtonWithTitle: ok];
-        // Add a Cancel button with Escape key equivalent
-        let cancel = NSString::alloc(nil).init_str("Cancel");
-        let cancel_btn: *mut Object = msg_send![alert, addButtonWithTitle: cancel];
-        let esc = NSString::alloc(nil).init_str("\u{1b}");
-        let _: () = msg_send![cancel_btn, setKeyEquivalent: esc];
+    pub fn show_settings_modal() {
+        unsafe {
+            let alert: *mut Object = msg_send![class!(NSAlert), new];
+            let title = NSString::alloc(nil).init_str("Settings");
+            let _: () = msg_send![alert, setMessageText: title];
+            let ok = NSString::alloc(nil).init_str("OK");
+            let _: *mut Object = msg_send![alert, addButtonWithTitle: ok];
+            // Add a Cancel button with Escape key equivalent
+            let cancel = NSString::alloc(nil).init_str("Cancel");
+            let cancel_btn: *mut Object = msg_send![alert, addButtonWithTitle: cancel];
+            let esc = NSString::alloc(nil).init_str("\u{1b}");
+            let _: () = msg_send![cancel_btn, setKeyEquivalent: esc];
 
-        // Accessory view with a tabbed interface: General and Shortcuts
-        let acc_frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 180.0));
-        let accessory: *mut Object = msg_send![class!(NSView), alloc];
-        let accessory: *mut Object = msg_send![accessory, initWithFrame: acc_frame];
+            // Accessory view with a tabbed interface: General and Shortcuts
+            let acc_frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 180.0));
+            let accessory: *mut Object = msg_send![class!(NSView), alloc];
+            let accessory: *mut Object = msg_send![accessory, initWithFrame: acc_frame];
 
-        // Create NSTabView
-        let tab: *mut Object = msg_send![class!(NSTabView), alloc];
-        let tab: *mut Object = msg_send![tab, initWithFrame: acc_frame];
+            // Create NSTabView
+            let tab: *mut Object = msg_send![class!(NSTabView), alloc];
+            let tab: *mut Object = msg_send![tab, initWithFrame: acc_frame];
 
-        // General tab content
-        let general_view: *mut Object = msg_send![class!(NSView), alloc];
-        let general_view: *mut Object = msg_send![general_view, initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 150.0))];
+            // General tab content
+            let general_view: *mut Object = msg_send![class!(NSView), alloc];
+            let general_view: *mut Object = msg_send![general_view, initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 150.0))];
 
-        // Fit Now button
-        let btn: *mut Object = msg_send![class!(NSButton), alloc];
-        let btn: *mut Object = msg_send![btn, initWithFrame: NSRect::new(NSPoint::new(16.0, 92.0), NSSize::new(380.0, 28.0))];
-        let t1 = NSString::alloc(nil).init_str("Fit Window to Image Now");
-        let _: () = msg_send![btn, setTitle: t1];
-        let _: () = msg_send![btn, setButtonType: 1_i64]; // momentary push
-        let handler = get_handler_instance();
-        let _: () = msg_send![btn, setTarget: handler];
-        let _: () = msg_send![btn, setAction: sel!(rustFitNow:)];
-        let _: () = msg_send![general_view, addSubview: btn];
+            // Fit Now button
+            let btn: *mut Object = msg_send![class!(NSButton), alloc];
+            let btn: *mut Object = msg_send![btn, initWithFrame: NSRect::new(NSPoint::new(16.0, 92.0), NSSize::new(380.0, 28.0))];
+            let t1 = NSString::alloc(nil).init_str("Fit Window to Image Now");
+            let _: () = msg_send![btn, setTitle: t1];
+            let _: () = msg_send![btn, setButtonType: 1_i64]; // momentary push
+            let handler = get_handler_instance();
+            let _: () = msg_send![btn, setTarget: handler];
+            let _: () = msg_send![btn, setAction: sel!(rustFitNow:)];
+            let _: () = msg_send![general_view, addSubview: btn];
 
-        // Lock aspect ratio checkbox
-        let cb2: *mut Object = msg_send![class!(NSButton), alloc];
-        let cb2: *mut Object = msg_send![cb2, initWithFrame: NSRect::new(NSPoint::new(16.0, 56.0), NSSize::new(380.0, 24.0))];
-        let t2 = NSString::alloc(nil).init_str("Lock aspect ratio on resize");
-        let _: () = msg_send![cb2, setTitle: t2];
-        let _: () = msg_send![cb2, setButtonType: 3_i64]; // switch
-        if let Ok(s) = SETTINGS.lock() {
-            let aspect_state: i64 = if s.aspect_lock { 1 } else { 0 };
-            let _: () = msg_send![cb2, setState: aspect_state];
-        }
-        let _: () = msg_send![general_view, addSubview: cb2];
+            // Lock aspect ratio checkbox
+            let cb2: *mut Object = msg_send![class!(NSButton), alloc];
+            let cb2: *mut Object = msg_send![cb2, initWithFrame: NSRect::new(NSPoint::new(16.0, 56.0), NSSize::new(380.0, 24.0))];
+            let t2 = NSString::alloc(nil).init_str("Lock aspect ratio on resize");
+            let _: () = msg_send![cb2, setTitle: t2];
+            let _: () = msg_send![cb2, setButtonType: 3_i64]; // switch
+                                                              // Tag for later lookup when applying settings
+            let _: () = msg_send![cb2, setTag: 42_i64];
+            if let Ok(s) = SETTINGS.lock() {
+                let aspect_state: i64 = if s.aspect_lock { 1 } else { 0 };
+                let _: () = msg_send![cb2, setState: aspect_state];
+            }
+            let _: () = msg_send![general_view, addSubview: cb2];
 
-        // Build "General" tab item
-        let general_item: *mut Object = msg_send![class!(NSTabViewItem), alloc];
-        let general_item: *mut Object = msg_send![general_item, initWithIdentifier: nil];
-        let label1 = NSString::alloc(nil).init_str("General");
-        let _: () = msg_send![general_item, setLabel: label1];
-        let _: () = msg_send![general_item, setView: general_view];
+            // Build "General" tab item
+            let general_item: *mut Object = msg_send![class!(NSTabViewItem), alloc];
+            let general_item: *mut Object = msg_send![general_item, initWithIdentifier: nil];
+            let label1 = NSString::alloc(nil).init_str("General");
+            let _: () = msg_send![general_item, setLabel: label1];
+            let _: () = msg_send![general_item, setView: general_view];
 
-        // Shortcuts tab content
-        let sc_view: *mut Object = msg_send![class!(NSView), alloc];
-        let sc_view: *mut Object = msg_send![sc_view, initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 150.0))];
+            // Shortcuts tab content
+            let sc_view: *mut Object = msg_send![class!(NSView), alloc];
+            let sc_view: *mut Object = msg_send![sc_view, initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 150.0))];
 
-        // Helper to add a label
-        let make_label = |y: f64, text: &str| -> *mut Object {
-            let tf: *mut Object = unsafe { msg_send![class!(NSTextField), alloc] };
-            let tf: *mut Object = unsafe {
-                msg_send![tf, initWithFrame: NSRect::new(NSPoint::new(16.0, y), NSSize::new(380.0, 20.0))]
-            };
-            let s = unsafe { NSString::alloc(nil).init_str(text) };
-            unsafe {
+            // Helper to add a label
+            let make_label = |y: f64, text: &str| -> *mut Object {
+                let tf: *mut Object = msg_send![class!(NSTextField), alloc];
+                let tf: *mut Object = msg_send![tf, initWithFrame: NSRect::new(NSPoint::new(16.0, y), NSSize::new(380.0, 20.0))];
+                let s = NSString::alloc(nil).init_str(text);
                 let _: () = msg_send![tf, setStringValue: s];
                 let _: () = msg_send![tf, setBezeled: 0_i32];
                 let _: () = msg_send![tf, setDrawsBackground: 0_i32];
                 let _: () = msg_send![tf, setEditable: 0_i32];
                 let _: () = msg_send![tf, setSelectable: 0_i32];
-            }
-            tf
-        };
+                tf
+            };
 
-        // Add shortcut rows
-        let row1 = make_label(110.0, "Cmd+,  — Open Settings");
-        let row2 = make_label(88.0, "Cmd+O  — Open File…");
-        let row3 = make_label(66.0, "Cmd+Y  — Quick Look");
-        unsafe {
+            // Add shortcut rows
+            let row1 = make_label(110.0, "Cmd+,  — Open Settings");
+            let row2 = make_label(88.0, "Cmd+O  — Open File…");
+            let row3 = make_label(66.0, "Cmd+Y  — Quick Look");
             let _: () = msg_send![sc_view, addSubview: row1];
             let _: () = msg_send![sc_view, addSubview: row2];
             let _: () = msg_send![sc_view, addSubview: row3];
-        }
 
-        // Build "Shortcuts" tab item
-        let sc_item: *mut Object = msg_send![class!(NSTabViewItem), alloc];
-        let sc_item: *mut Object = msg_send![sc_item, initWithIdentifier: nil];
-        let label2 = NSString::alloc(nil).init_str("Shortcuts");
-        let _: () = msg_send![sc_item, setLabel: label2];
-        let _: () = msg_send![sc_item, setView: sc_view];
+            // Build "Shortcuts" tab item
+            let sc_item: *mut Object = msg_send![class!(NSTabViewItem), alloc];
+            let sc_item: *mut Object = msg_send![sc_item, initWithIdentifier: nil];
+            let label2 = NSString::alloc(nil).init_str("Shortcuts");
+            let _: () = msg_send![sc_item, setLabel: label2];
+            let _: () = msg_send![sc_item, setView: sc_view];
 
-        // Add items to tab view
-        let _: () = msg_send![tab, addTabViewItem: general_item];
-        let _: () = msg_send![tab, addTabViewItem: sc_item];
-        let _: () = msg_send![accessory, addSubview: tab];
-        let _: () = msg_send![alert, setAccessoryView: accessory];
+            // Add items to tab view
+            let _: () = msg_send![tab, addTabViewItem: general_item];
+            let _: () = msg_send![tab, addTabViewItem: sc_item];
+            let _: () = msg_send![accessory, addSubview: tab];
+            let _: () = msg_send![alert, setAccessoryView: accessory];
 
-        let response: i64 = msg_send![alert, runModal];
+            let response: i64 = msg_send![alert, runModal];
 
-        // Only apply settings if OK (first button) was pressed.
-        if response == 1000 {
-            // Read states back and apply
-            let s2: i64 = msg_send![cb2, state];
-            if let Ok(mut s) = SETTINGS.lock() {
-                s.aspect_lock = s2 != 0;
-            }
-            // Notify app to apply settings (e.g., re-layout effects)
-            if let Some(proxy) = EVENT_PROXY.lock().ok().and_then(|g| g.as_ref().cloned()) {
-                let _ = proxy.send_event(UserEvent::ApplySettings);
+            // Only apply settings if OK (first button) was pressed.
+            if response == 1000 {
+                // Read states back and apply
+                let s2: i64 = msg_send![cb2, state];
+                if let Ok(mut s) = SETTINGS.lock() {
+                    s.aspect_lock = s2 != 0;
+                }
+                // Notify app to apply settings (e.g., re-layout effects)
+                if let Some(proxy) = EVENT_PROXY.lock().ok().and_then(|g| g.as_ref().cloned()) {
+                    let _ = proxy.send_event(UserEvent::ApplySettings);
+                }
             }
         }
     }
@@ -528,13 +528,11 @@ fn main() {
     }
     #[cfg(target_os = "macos")]
     if let Some(ref p) = selected {
-        unsafe {
-            if let Some((w, h)) = macos_image::set_image(&window, p) {
-                let aspect = if h > 0.0 { w / h } else { 0.0 };
-                if aspect > 0.0 {
-                    if let Ok(mut a) = IMAGE_ASPECT.lock() {
-                        *a = Some(aspect);
-                    }
+        if let Some((w, h)) = macos_image::set_image(&window, p) {
+            let aspect = if h > 0.0 { w / h } else { 0.0 };
+            if aspect > 0.0 {
+                if let Ok(mut a) = IMAGE_ASPECT.lock() {
+                    *a = Some(aspect);
                 }
             }
         }
@@ -568,7 +566,7 @@ fn main() {
                         match key {
                             VirtualKeyCode::Comma => {
                                 #[cfg(target_os = "macos")]
-                                unsafe {
+                                {
                                     macos_settings::show_settings_modal();
                                 }
                                 // Apply settings and persist
@@ -578,20 +576,17 @@ fn main() {
                                 selected = open_file_dialog_and_set_title(&window);
                                 #[cfg(target_os = "macos")]
                                 if let Some(ref p) = selected {
-                                    unsafe {
-                                        if let Some((w, h)) = macos_image::set_image(&window, p) {
-                                            let aspect = if h > 0.0 { w / h } else { 0.0 };
-                                            if aspect > 0.0 {
-                                                if let Ok(mut a) = IMAGE_ASPECT.lock() {
-                                                    *a = Some(aspect);
-                                                }
+                                    if let Some((w, h)) = macos_image::set_image(&window, p) {
+                                        let aspect = if h > 0.0 { w / h } else { 0.0 };
+                                        if aspect > 0.0 {
+                                            if let Ok(mut a) = IMAGE_ASPECT.lock() {
+                                                *a = Some(aspect);
                                             }
-                                            if let Ok(s) = SETTINGS.lock() {
-                                                if s.fit_window {
-                                                    let (cw, ch) =
-                                                        macos_image::clamp_to_screen(&window, w, h);
-                                                    window.set_inner_size(LogicalSize::new(cw, ch));
-                                                }
+                                        }
+                                        if let Ok(s) = SETTINGS.lock() {
+                                            if s.fit_window {
+                                                let (cw, ch) = macos_image::clamp_to_screen(w, h);
+                                                window.set_inner_size(LogicalSize::new(cw, ch));
                                             }
                                         }
                                     }
@@ -607,9 +602,9 @@ fn main() {
                             VirtualKeyCode::F => {
                                 // Trigger Fit Now action
                                 #[cfg(target_os = "macos")]
-                                unsafe {
+                                {
                                     if let Some((w, h)) = macos_image::last_image_size() {
-                                        let (cw, ch) = macos_image::clamp_to_screen(&window, w, h);
+                                        let (cw, ch) = macos_image::clamp_to_screen(w, h);
                                         window.set_inner_size(LogicalSize::new(cw, ch));
                                     }
                                 }
@@ -621,7 +616,7 @@ fn main() {
                 }
                 WindowEvent::Resized(new_size) => {
                     #[cfg(target_os = "macos")]
-                    unsafe {
+                    {
                         macos_image::layout_image_view(&window);
                     }
                     // Persist new window size
@@ -659,7 +654,7 @@ fn main() {
                 }
                 WindowEvent::ScaleFactorChanged { .. } => {
                     #[cfg(target_os = "macos")]
-                    unsafe {
+                    {
                         macos_image::layout_image_view(&window);
                     }
                 }
@@ -669,13 +664,11 @@ fn main() {
                 selected = open_file_dialog_and_set_title(&window);
                 #[cfg(target_os = "macos")]
                 if let Some(ref p) = selected {
-                    unsafe {
-                        if let Some((w, h)) = macos_image::set_image(&window, p) {
-                            let aspect = if h > 0.0 { w / h } else { 0.0 };
-                            if aspect > 0.0 {
-                                if let Ok(mut a) = IMAGE_ASPECT.lock() {
-                                    *a = Some(aspect);
-                                }
+                    if let Some((w, h)) = macos_image::set_image(&window, p) {
+                        let aspect = if h > 0.0 { w / h } else { 0.0 };
+                        if aspect > 0.0 {
+                            if let Ok(mut a) = IMAGE_ASPECT.lock() {
+                                *a = Some(aspect);
                             }
                         }
                     }
@@ -691,22 +684,18 @@ fn main() {
             }
             Event::UserEvent(UserEvent::OpenSettings) => {
                 #[cfg(target_os = "macos")]
-                unsafe {
+                {
                     macos_settings::show_settings_modal();
                 }
             }
             Event::UserEvent(UserEvent::ApplySettings) => {
-                #[cfg(target_os = "macos")]
-                unsafe {
-                    // No auto-fit here anymore; only aspect_lock takes effect.
-                }
                 save_persisted(selected.as_ref(), &window);
             }
             Event::UserEvent(UserEvent::FitNow) => {
                 #[cfg(target_os = "macos")]
-                unsafe {
+                {
                     if let Some((w, h)) = macos_image::last_image_size() {
-                        let (cw, ch) = macos_image::clamp_to_screen(&window, w, h);
+                        let (cw, ch) = macos_image::clamp_to_screen(w, h);
                         window.set_inner_size(LogicalSize::new(cw, ch));
                     }
                 }

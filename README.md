@@ -1,79 +1,74 @@
-# Always On Top (macOS/Windows via Tauri)
+# Always On Top
 
-A minimal utility written in Rust using Tauri for cross‑platform packaging. It opens a native file picker and keeps its window always on top. The selected file name is shown in the window title.
+A tiny always-on-top image viewer built in Rust with a Tauri shell for macOS and Windows (Linux dev-only for now). It pins the window above other apps, lets you open an image, and auto-fits the window to the image. Behavior is defined in OpenSpec (see `openspec/specs/`).
 
-## Build
+## Features
+- Always-on-top window on launch (macOS + Windows).
+- Open an image via File → Open… (`Cmd/Ctrl+O`); title shows the filename.
+- Auto-fit to image on selection with manual Fit Now (`Cmd/Ctrl+F`).
+- Optional aspect-lock toggle in the native menu; remembers window size and last opened file.
+- Quick Look shortcut (`Cmd+Y`) on macOS (no-op on Windows).
 
-Requirements (legacy winit app):
-- macOS
-- Rust toolchain (`rustup`, `cargo`)
+Relevant specs: `specs/always-on-top/`, `specs/file-selection/`, `specs/fit-window/`, `specs/aspect-lock/`, `specs/menu-and-shortcuts/`, `specs/quick-look/`, `specs/window-size/`, `specs/settings-persistence/`.
 
-Steps:
+## Platforms
+- macOS: supported (development and bundled app).
+- Windows: supported (development and NSIS installer).
+- Linux: dev-only; no packaged binary yet (build/run locally).
 
+## Prerequisites
+- Rust toolchain (`rustup`, `cargo`).
+- Tauri CLI for bundling/dev: `cargo install tauri-cli`.
+- Platform deps:
+  - macOS: Xcode Command Line Tools.
+  - Windows: Visual Studio Build Tools (MSVC) + WebView2 Runtime.
+  - Linux: system dependencies per Tauri docs; only dev run covered here.
+- Optional: `just` for common tasks (install via `cargo install just`).
+
+## Quick Start (Tauri shell)
+```sh
+# Clone and enter repo
+just tauri-dev            # Runs Tauri in dev mode
 ```
-cargo run --release
+- The window launches always-on-top; use File → Open… to pick an image.
+
+### Build Bundles (release artifacts)
+```sh
+just tauri-build          # macOS .app + Windows NSIS installer
 ```
+Artifacts:
+- macOS app bundle: `src-tauri/target/release/bundle/macos/Always On Top.app`
+- Windows NSIS installer: `src-tauri/target/release/bundle/nsis/Always On Top_*.exe`
 
-Notes:
-- The window launches as always-on-top by default.
-- On launch, a native file dialog lets you pick a file. If you cancel, the app stays open.
-- The selected file name appears in the window title.
-- macOS menu includes File → Open… (Cmd+O) and View → Quick Look (Cmd+Y).
-- Quick Look uses the system `qlmanage` tool to present a preview.
-
-## Tauri (macOS + Windows)
-
-This repo includes a Tauri shell under `src-tauri/` with a minimal static frontend in `dist/` to enable Windows distribution (NSIS) and cross‑platform packaging while preserving core behavior.
-
-Requirements:
-- Rust toolchain (`rustup`, `cargo`)
-- Tauri CLI (`cargo install tauri-cli`) and platform prerequisites (see Tauri docs)
-- macOS or Windows (for platform‑specific bundles)
-
-Dev run:
-
-```
-just tauri-dev
-```
-
-Build bundles:
-
-```
-just tauri-build
-```
-
-- macOS: `.app` under `src-tauri/target/release/bundle/macos/Always On Top.app`
-- Windows: NSIS installer `.exe` under `src-tauri/target/release/bundle/nsis/`
-
-Open the built macOS app:
-
-```
+To open the built macOS app locally:
+```sh
 just tauri-open
 ```
 
-Notes:
-- Always‑on‑top is enabled by default on both macOS and Windows.
-- File → Open… (Cmd/Ctrl+O) and View → Fit to Image Now (Cmd/Ctrl+F) are available via menu and shortcuts.
-- Quick Look is macOS‑only; on Windows it is a no‑op.
-
-## Bundle as .app (legacy)
-
-Install bundler:
-
-```
-cargo install cargo-bundle
+### Legacy winit app (macOS only)
+```sh
+just build-run            # cargo run
+just bundle-run           # cargo bundle --release (macOS .app)
 ```
 
-Build app bundle:
+## Downloads
+- GitHub Actions (workflow: `release-bundles`) builds macOS and Windows artifacts and uploads them to the Releases page when a tag (`v*`) is pushed or the workflow is dispatched manually.
+- If no release is published yet, build locally using the commands above.
+- Linux packages are not produced; run locally on Linux if needed.
 
-```
-cargo bundle --release
-```
+## Release Pipeline (manual + CI)
+1) Ensure `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo check` pass.
+2) Release automation: `.github/workflows/release-plz.yml` (runs on `main` pushes or manual dispatch) uses `release-plz` to update `CHANGELOG.md`, bump versions, tag with `v*`, and create the GitHub Release (no crates.io publish).
+3) Bundles on tags: `.github/workflows/release-bundles.yml` builds on `v*` tags (or manual dispatch), uploads build artifacts as workflow artifacts, and publishes/updates the GitHub Release with the macOS zip + Windows installer.
+4) Local build sanity (optional): `just tauri-build`; collect artifacts from `src-tauri/target/release/bundle/macos/Always On Top.app` and `src-tauri/target/release/bundle/nsis/Always On Top_*.exe`.
+5) Draft release notes summarizing changes and link relevant OpenSpec change IDs (release-plz populates the changelog automatically).
 
-The `.app` will appear under `target/release/bundle/osx/Always On Top.app`.
+## Troubleshooting
+- **Tauri missing deps**: install platform prereqs (Xcode CLT on macOS; MSVC + WebView2 on Windows).
+- **Quick Look**: works on macOS only; expected no-op on Windows/Linux.
+- **Linux**: if building locally, ensure WebKit/WebView2 deps required by Tauri are installed; packaging not yet supported.
+- **Window/menu missing**: ensure you’re running the Tauri shell (`just tauri-dev` or `just tauri-build`) and not the legacy winit binary unless you’re on macOS.
 
-## Future Enhancements
-- Toggle always-on-top from a menu or shortcut
-- Embed Quick Look view instead of external panel
-- App icon and signing/notarization
-- Embedded preview with zoom/pan (see OpenSpec change `add-embedded-preview-ui`)
+## Contributing
+- Specs live under `openspec/specs/`; proposed changes go in `openspec/changes/`.
+- Prefer `just tauri-dev` for local runs; keep changes small and update specs when behavior changes.
