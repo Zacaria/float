@@ -1,0 +1,17 @@
+{
+  "identifier": "main-windows",
+  "description": "Permissions for all app windows (main and spawned).",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "core:app:default",
+    "core:event:default",
+    "core:image:default",
+    "core:menu:default",
+    "core:resources:default",
+    "core:webview:default",
+    "core:window:default",
+    "core:window:allow-start-dragging",
+    "dialog:default"
+  ]
+}

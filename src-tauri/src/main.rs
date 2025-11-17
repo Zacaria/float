@@ -46,6 +46,8 @@ enum Error {
     Io(#[from] std::io::Error),
     #[error("serde: {0}")]
     Serde(#[from] serde_json::Error),
+    #[error("tauri: {0}")]
+    Tauri(#[from] tauri::Error),
 }
 
 struct AppState {
@@ -153,6 +155,33 @@ fn schedule_size_save(app: AppHandle, label: String, win: WebviewWindow) {
     }
 }
 
+fn spawn_empty_window(app: &AppHandle) -> Result<(), Error> {
+    let window = tauri::WebviewWindowBuilder::new(
+        app,
+        next_window_label(app),
+        WebviewUrl::App("index.html".into()),
+    )
+    .title("Always On Top")
+    .visible(true)
+    .resizable(true)
+    .decorations(false)
+    .inner_size(400.0, 400.0)
+    .build()?;
+
+    apply_initial_window_state(app, &window, false);
+    wire_window_events(app, &window);
+    if let Some(state) = app.try_state::<AppState>() {
+        state
+            .last_focused_window
+            .lock()
+            .replace(window.label().to_string());
+        state
+            .window_counter
+            .store(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    Ok(())
+}
+
 fn reset_cache(app: &AppHandle) -> Result<(), Error> {
     if let Some(state) = app.try_state::<AppState>() {
         // Cancel pending saves to avoid rewriting the file after deletion.
@@ -164,6 +193,13 @@ fn reset_cache(app: &AppHandle) -> Result<(), Error> {
         state.adjusting_resize.lock().clear();
         state.selections.lock().clear();
         state.last_focused_window.lock().take();
+        // Sync menu toggle to defaults
+        if let Some(toggle) = state.aspect_toggle.lock().clone() {
+            let _ = toggle.set_checked(false);
+        }
+        state
+            .window_counter
+            .store(0, std::sync::atomic::Ordering::SeqCst);
     }
     if let Ok(path) = config_path(app) {
         if path.exists() {
@@ -173,7 +209,7 @@ fn reset_cache(app: &AppHandle) -> Result<(), Error> {
     for (_, window) in app.webview_windows() {
         let _ = window.close();
     }
-    app.exit(0);
+    spawn_empty_window(app)?;
     Ok(())
 }
 
@@ -294,13 +330,6 @@ fn navigate_selection(app: &AppHandle, window: &WebviewWindow, delta: isize) -> 
         }
     }
     None
-}
-
-#[tauri::command]
-fn start_window_drag(window: WebviewWindow) -> Result<(), String> {
-    window
-        .start_dragging()
-        .map_err(|e| format!("failed to start drag: {e}"))
 }
 
 fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last_file: bool) {
@@ -489,19 +518,6 @@ fn fit_now(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
-#[tauri::command]
-fn quick_look(_app: AppHandle) -> Result<(), String> {
-    // Placeholder: No-op for now; future change may implement.
-    Ok(())
-}
-
-#[cfg(not(target_os = "macos"))]
-#[tauri::command]
-fn quick_look(_app: AppHandle) -> Result<(), String> {
-    Ok(())
-}
-
 #[tauri::command]
 fn get_settings(app: AppHandle) -> PersistedState {
     if let Some(state) = app.try_state::<AppState>() {
@@ -616,16 +632,27 @@ fn pick_and_apply_selection(app: AppHandle, target: SelectionTarget) -> Option<S
     }
 }
 
+fn next_window_label(app: &AppHandle) -> String {
+    if let Some(state) = app.try_state::<AppState>() {
+        let idx = state
+            .window_counter
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        if idx == 1 {
+            "main".to_string()
+        } else {
+            format!("window-{idx}")
+        }
+    } else {
+        "main".to_string()
+    }
+}
+
 fn spawn_new_window_with_files(app: &AppHandle, files: Vec<String>) -> Option<String> {
     if files.is_empty() {
         return None;
     }
-    let counter = if let Some(state) = app.try_state::<AppState>() {
-        state.window_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
-    } else {
-        1
-    };
-    let label = format!("window-{counter}");
+    let label = next_window_label(app);
     let window = tauri::WebviewWindowBuilder::new(
         app,
         &label,
@@ -710,7 +737,7 @@ fn main() {
                 CheckMenuItemBuilder::with_id("aspect_lock_toggle", "Lock aspect ratio on resize")
                     .checked(load_state(&app_handle).aspect_lock)
                     .build(&app_handle)?;
-            let mut view_menu = SubmenuBuilder::new(&app_handle, "View")
+            let view_menu = SubmenuBuilder::new(&app_handle, "View")
                 .item(
                     &MenuItemBuilder::with_id("fit_now", "Fit to Image Now")
                         .accelerator(if cfg!(target_os = "macos") {
@@ -739,14 +766,6 @@ fn main() {
                         .build(&app_handle)?,
                 )
                 .item(&aspect_toggle);
-            #[cfg(target_os = "macos")]
-            {
-                view_menu = view_menu.item(
-                    &MenuItemBuilder::with_id("quick_look", "Quick Look")
-                        .accelerator("Cmd+Y")
-                        .build(&app_handle)?,
-                );
-            }
             let app_menu = MenuBuilder::new(&app_handle)
                 .item(&file_menu)
                 .item(&view_menu.build()?)
@@ -822,9 +841,6 @@ fn main() {
                     let _ = navigate_selection(app, &win, 1);
                 }
             }
-            "quick_look" => {
-                let _ = quick_look(app.clone());
-            }
             "aspect_lock_toggle" => {
                 if let Some(state) = app.try_state::<AppState>() {
                     let mut s = state.settings.lock().clone();
@@ -851,13 +867,11 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             choose_file,
             fit_now,
-            quick_look,
             get_settings,
             set_settings,
             load_image_data,
             previous_file,
-            next_file,
-            start_window_drag
+            next_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

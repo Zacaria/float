@@ -10,4 +10,4 @@
 - Given window size has been saved previously
 - When the user triggers Reset Cache
 - Then any persisted window size data is removed or reset
-- And on next launch, the window uses defaults until resized again
+- And the fresh window opened after reset (and on next launch) uses defaults until resized again

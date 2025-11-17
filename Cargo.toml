@@ -2,7 +2,7 @@
 name = "always-on-top"
 version = "0.1.0"
 edition = "2021"
-description = "Minimal macOS utility to keep a window always on top and Quick Look a selected file."
+description = "Minimal macOS utility to keep a window always on top."
 authors = ["Always On Top Team"]
 
 [dependencies]
@@ -23,5 +23,5 @@ identifier = "com.example.always-on-top"
 icon = []
 resources = []
 category = "public.app-category.utilities"
-short_description = "Keep a window always on top and Quick Look a selected file."
+short_description = "Keep a window always on top."
 osx_minimum_system_version = "10.13"

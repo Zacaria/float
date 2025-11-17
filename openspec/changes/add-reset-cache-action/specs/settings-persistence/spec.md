@@ -9,4 +9,4 @@
 - Given settings have been saved previously
 - When the user triggers Reset Cache
 - Then the settings JSON is deleted or overwritten to defaults
-- And the next app launch starts with default settings applied
+- And the app continues with default settings applied in the fresh window that opens after reset (and on next launch)

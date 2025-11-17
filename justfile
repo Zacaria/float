@@ -44,7 +44,7 @@ tauri-open:
 # Requires clean working tree and access to origin remote.
 release-bump:
 	set -euo pipefail
-	if [ -n "$$(git status --porcelain)" ]; then echo "Working tree not clean. Commit or stash first." >&2; exit 1; fi
+	if [ -n "$(git status --porcelain)" ]; then echo "Working tree not clean. Commit or stash first." >&2; exit 1; fi
 	if ! command -v release-plz >/dev/null 2>&1; then echo "Installing release-plz..." >&2; cargo install release-plz --locked; fi
 	release-plz release --config release-plz.toml --no-publish
 	git push --follow-tags

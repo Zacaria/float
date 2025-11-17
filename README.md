@@ -7,9 +7,8 @@ A tiny always-on-top image viewer built in Rust with a Tauri shell for macOS and
 - Open an image via File → Open… (`Cmd/Ctrl+O`); title shows the filename.
 - Auto-fit to image on selection with manual Fit Now (`Cmd/Ctrl+F`).
 - Optional aspect-lock toggle in the native menu; remembers window size and last opened file.
-- Quick Look shortcut (`Cmd+Y`) on macOS (no-op on Windows).
 
-Relevant specs: `specs/always-on-top/`, `specs/file-selection/`, `specs/fit-window/`, `specs/aspect-lock/`, `specs/menu-and-shortcuts/`, `specs/quick-look/`, `specs/window-size/`, `specs/settings-persistence/`.
+Relevant specs: `specs/always-on-top/`, `specs/file-selection/`, `specs/fit-window/`, `specs/aspect-lock/`, `specs/menu-and-shortcuts/`, `specs/window-size/`, `specs/settings-persistence/`.
 
 ## Platforms
 - macOS: supported (development and bundled app).
@@ -65,7 +64,6 @@ just bundle-run           # cargo bundle --release (macOS .app)
 
 ## Troubleshooting
 - **Tauri missing deps**: install platform prereqs (Xcode CLT on macOS; MSVC + WebView2 on Windows).
-- **Quick Look**: works on macOS only; expected no-op on Windows/Linux.
 - **Linux**: if building locally, ensure WebKit/WebView2 deps required by Tauri are installed; packaging not yet supported.
 - **Window/menu missing**: ensure you’re running the Tauri shell (`just tauri-dev` or `just tauri-build`) and not the legacy winit binary unless you’re on macOS.
 

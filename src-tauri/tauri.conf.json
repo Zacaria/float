@@ -12,7 +12,9 @@
     "withGlobalTauri": true,
     "security": {
       "assetProtocol": {
-        "scope": ["/**"]
+        "scope": [
+          "/**"
+        ]
       }
     },
     "windows": [
@@ -31,7 +33,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg", "nsis"],
+    "targets": [
+      "app",
+      "dmg",
+      "nsis"
+    ],
     "icon": [],
     "windows": {
       "nsis": {

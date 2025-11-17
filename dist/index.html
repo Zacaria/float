@@ -60,7 +60,17 @@
       const nextBtn = document.getElementById('nextBtn');
       const appEl = document.getElementById('app');
 
-      const showPlaceholder = (message = 'No file selected') => {
+      const defaultPlaceholder = () => {
+        const platform =
+          navigator?.userAgentData?.platform ||
+          navigator?.platform ||
+          '';
+        const isMac = platform.toUpperCase().includes('MAC');
+        const shortcut = isMac ? '⌘+O' : 'Ctrl+O';
+        return `No file selected — press ${shortcut} to open`;
+      };
+
+      const showPlaceholder = (message = defaultPlaceholder()) => {
         imageContainer.classList.add('placeholder');
         placeholderEl.textContent = message;
         imageEl.src = '';
@@ -159,23 +169,11 @@
         }, 2000);
       };
 
-      const startWindowDrag = async (event) => {
-        if (event?.target?.closest('.no-drag')) return;
-        event?.preventDefault();
-        try {
-          await invoke('start_window_drag');
-        } catch (err) {
-          console.warn('Failed to start window drag', err);
-        }
-      };
-
       const attachChromeHandlers = () => {
         ['mousemove', 'mousedown', 'keydown'].forEach((evt) => {
           window.addEventListener(evt, showChrome, { passive: true });
         });
         showChrome();
-        imageContainer.addEventListener('mousedown', startWindowDrag, { passive: false });
-        imageContainer.addEventListener('touchstart', startWindowDrag, { passive: false });
       };
 
       const bootstrap = async () => {

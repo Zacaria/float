@@ -24,15 +24,16 @@ The File/Open and View/Fit to Image commands MUST be available from the macOS/Wi
 - And triggering those app shortcuts does nothing (OS/system full-screen affordances remain unchanged)
 
 ### Requirement: Reset Cache command in menu bar
-The app MUST provide a Reset Cache command accessible via the app menu and a platform-appropriate shortcut. Triggering Reset Cache clears persisted app state and closes all open windows.
+The app MUST provide a Reset Cache command accessible via the app menu and a platform-appropriate shortcut. Triggering Reset Cache clears persisted app state, closes all open windows, and reopens a fresh window with empty state.
 
 #### Scenario: Reset Cache via menu
 - Given the app is running with one or more windows open
 - When the user selects the Reset Cache menu item
 - Then persisted state (settings, last opened files list, window sizes) is deleted or reset to defaults
 - And all app windows close as part of the reset
+- And a new window opens in a clean state
 
 #### Scenario: Reset Cache via shortcut
 - Given the app is running
 - When the user presses the Reset Cache shortcut (Cmd+Shift+Backspace on macOS, Ctrl+Shift+Backspace on Windows)
-- Then the Reset Cache behavior occurs identically to the menu invocation
+- Then the Reset Cache behavior occurs identically to the menu invocation, including reopening a clean window

@@ -19,7 +19,6 @@ use std::sync::Mutex;
 #[derive(Clone, Debug)]
 enum UserEvent {
     OpenFile,
-    QuickLook,
     RestoreTop,
     OpenSettings,
     ApplySettings,
@@ -132,12 +131,6 @@ mod macos_menu {
         }
     }
 
-    extern "C" fn rust_quick_look(_this: &Object, _sel: Sel, _sender: *mut Object) {
-        if let Some(proxy) = EVENT_PROXY.lock().ok().and_then(|g| g.as_ref().cloned()) {
-            let _ = proxy.send_event(UserEvent::QuickLook);
-        }
-    }
-
     extern "C" fn rust_open_settings(_this: &Object, _sel: Sel, _sender: *mut Object) {
         if let Some(proxy) = EVENT_PROXY.lock().ok().and_then(|g| g.as_ref().cloned()) {
             let _ = proxy.send_event(UserEvent::OpenSettings);
@@ -158,10 +151,6 @@ mod macos_menu {
             decl.add_method(
                 sel!(rustOpenFile:),
                 rust_open_file as extern "C" fn(&Object, Sel, *mut Object),
-            );
-            decl.add_method(
-                sel!(rustQuickLook:),
-                rust_quick_look as extern "C" fn(&Object, Sel, *mut Object),
             );
             decl.add_method(
                 sel!(rustFitNow:),
@@ -227,7 +216,7 @@ mod macos_menu {
         file_menu.addItem_(open_item);
         file_menu_item.setSubmenu_(file_menu);
 
-        // View menu (Fit Now Cmd+F, Quick Look Cmd+Y)
+        // View menu (Fit Now Cmd+F)
         let view_menu = NSMenu::new(nil).autorelease();
         // Fit to Image Now
         let fit_title = NSString::alloc(nil).init_str("Fit to Image Now");
@@ -237,13 +226,6 @@ mod macos_menu {
             .autorelease();
         let _: () = msg_send![fit_item, setTarget: handler];
         view_menu.addItem_(fit_item);
-        let ql_title = NSString::alloc(nil).init_str("Quick Look");
-        let y_key = NSString::alloc(nil).init_str("y");
-        let ql_item = NSMenuItem::alloc(nil)
-            .initWithTitle_action_keyEquivalent_(ql_title, sel!(rustQuickLook:), y_key)
-            .autorelease();
-        let _: () = msg_send![ql_item, setTarget: handler];
-        view_menu.addItem_(ql_item);
         view_menu_item.setSubmenu_(view_menu);
     }
 }
@@ -434,7 +416,7 @@ mod macos_settings {
             // Add shortcut rows
             let row1 = make_label(110.0, "Cmd+,  — Open Settings");
             let row2 = make_label(88.0, "Cmd+O  — Open File…");
-            let row3 = make_label(66.0, "Cmd+Y  — Quick Look");
+            let row3 = make_label(66.0, "");
             let _: () = msg_send![sc_view, addSubview: row1];
             let _: () = msg_send![sc_view, addSubview: row2];
             let _: () = msg_send![sc_view, addSubview: row3];
@@ -486,7 +468,7 @@ fn main() {
         .expect("Failed to create window");
     window.set_window_level(WindowLevel::AlwaysOnTop);
 
-    // Install a minimal macOS menubar with File->Open and View->Quick Look
+    // Install a minimal macOS menubar with File->Open and View actions
     #[cfg(target_os = "macos")]
     unsafe {
         macos_menu::install_menubar();
@@ -675,13 +657,6 @@ fn main() {
                 }
                 save_persisted(selected.as_ref(), &window);
             }
-            Event::UserEvent(UserEvent::QuickLook) => {
-                if let Some(path) = selected.as_ref() {
-                    // Temporarily drop window to normal level so Quick Look isn't obscured.
-                    window.set_window_level(WindowLevel::Normal);
-                    quick_look(path.clone());
-                }
-            }
             Event::UserEvent(UserEvent::OpenSettings) => {
                 #[cfg(target_os = "macos")]
                 {
@@ -737,7 +712,6 @@ fn open_file_dialog_and_set_title(window: &winit::window::Window) -> Option<Path
 
 #[cfg(target_os = "macos")]
 fn quick_look(path: PathBuf) {
-    // Run Quick Look in a background thread; when it finishes, restore topmost.
     thread::spawn(move || {
         let _ = Command::new("qlmanage").arg("-p").arg(&path).status();
         if let Some(proxy) = EVENT_PROXY.lock().ok().and_then(|g| g.as_ref().cloned()) {

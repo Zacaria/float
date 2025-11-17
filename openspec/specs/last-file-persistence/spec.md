@@ -4,17 +4,13 @@
 TBD - created by archiving change persist-settings-and-last-file. Update Purpose after archive.
 ## Requirements
 ### Requirement: Persist last opened file
-The application MUST persist the absolute path of the last opened file in the same JSON file and restore it on startup if the file still exists.
+The application MUST persist the absolute path of the active file from the last focused window when quitting and restore it on startup if the file still exists.
 
-#### Scenario: Restore last file
-- Given the user previously opened a file
-- And the file still exists
-- When the application starts
-- Then the window title updates to include the file name
-- And the image is displayed without requiring a new selection
-
-#### Scenario: Missing file
-- Given the last file path points to a missing file
-- When the application starts
-- Then the application ignores the missing path and continues without a selection
+#### Scenario: Persist last focused window on quit
+- Given multiple windows are open
+- And one window is focused with an active file
+- When the user quits the application (for example, Cmd/Ctrl+Q or closing the last window)
+- Then the persisted last file path matches the focused window’s active file
+- And when the application starts again and that file exists, it becomes the active selection without requiring a new dialog
+- And if the stored file is missing, the app starts without a selection as before
 
