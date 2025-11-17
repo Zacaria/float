@@ -7,12 +7,14 @@ use std::{
     fs,
     path::PathBuf,
     sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
 };
 use tauri::menu::{
     CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
 };
 use tauri::{async_runtime, AppHandle, Emitter, Manager, WebviewWindow, WindowEvent, Wry};
 use tauri_plugin_dialog::DialogExt;
+use tokio::time::sleep;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct PersistedState {
@@ -49,6 +51,8 @@ struct AppState {
     // Menu toggle handles for syncing check states
     fit_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
     aspect_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
+    // Debounced save handle for window size persistence
+    pending_save: Mutex<Option<async_runtime::JoinHandle<()>>>,
 }
 
 fn config_path(app: &AppHandle) -> Result<PathBuf, Error> {
@@ -158,12 +162,15 @@ fn handle_selected_path(app: AppHandle, path_str: String) -> Option<String> {
             let _ = fit_now(app.clone(), win.clone());
         }
     }
-    let _ = app.emit(
-        "file-selected",
-        FileSelectedPayload {
-            path: Some(path_str.clone()),
-        },
-    );
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.emit(
+            "file-selected",
+            FileSelectedPayload {
+                path: Some(path_str.clone()),
+            },
+        );
+        let _ = win.eval("window.location.reload()");
+    }
     Some(path_str)
 }
 
@@ -323,6 +330,28 @@ fn set_settings(app: AppHandle, update: SettingsUpdate) -> Result<PersistedState
     Ok(st)
 }
 
+fn schedule_size_save(app: AppHandle, win: WebviewWindow) {
+    if let Some(state) = app.try_state::<AppState>() {
+        let mut pending = state.pending_save.lock();
+        if let Some(handle) = pending.take() {
+            handle.abort();
+        }
+        let app_for_task = app.clone();
+        let win_for_task = win.clone();
+        let handle = async_runtime::spawn(async move {
+            sleep(Duration::from_millis(1000)).await;
+            if let Some(state) = app_for_task.try_state::<AppState>() {
+                let st = state.settings.lock().clone();
+                let _ = save_state(&app_for_task, &win_for_task, st);
+            } else {
+                let st = load_state(&app_for_task);
+                let _ = save_state(&app_for_task, &win_for_task, st);
+            }
+        });
+        *pending = Some(handle);
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -363,6 +392,15 @@ fn main() {
                 )
                 .item(&fit_toggle)
                 .item(&aspect_toggle);
+            view_menu = view_menu.item(
+                &MenuItemBuilder::with_id("inspect", "Toggle Inspector")
+                    .accelerator(if cfg!(target_os = "macos") {
+                        "Alt+Cmd+I"
+                    } else {
+                        "Ctrl+Shift+I"
+                    })
+                    .build(&app_handle)?,
+            );
             #[cfg(target_os = "macos")]
             {
                 view_menu = view_menu.item(
@@ -417,11 +455,10 @@ fn main() {
                                 }
                             }
                         }
-                        // Persist latest window size (respecting any adjustment)
-                        let _ = save_state(&app_handle, &win, st);
+                        // Debounced persist of latest window size (respecting any adjustment)
+                        schedule_size_save(app_handle.clone(), win.clone());
                     } else {
-                        let st = load_state(&app_handle);
-                        let _ = save_state(&app_handle, &win, st);
+                        schedule_size_save(app_handle.clone(), win.clone());
                     }
                 }
             });
@@ -482,6 +519,11 @@ fn main() {
                         let _ = save_state(app, &win, s.clone());
                     }
                     *state.settings.lock() = s;
+                }
+            }
+            "inspect" => {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.open_devtools();
                 }
             }
             _ => {}

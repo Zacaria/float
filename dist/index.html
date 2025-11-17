@@ -46,30 +46,31 @@
         if (!path) return sources;
         if (convertFileSrc) {
           try {
-            const assetSrc = convertFileSrc(path);
-            console.debug('convertFileSrc resolved', { path, assetSrc });
-            sources.push(assetSrc);
-          } catch (err) {
-            console.warn('convertFileSrc failed, will try other fallbacks', { path, err });
+            sources.push(convertFileSrc(path));
+          } catch (_) {
+            // Ignore and continue to file:// fallback
           }
         }
         const encodedPath = encodeURI(path.startsWith('/') ? path : `/${path}`);
-        const manualAsset = `asset://localhost${encodedPath}`;
-        sources.push(manualAsset);
         const fileSrc = path.startsWith('file://') ? path : `file://${encodedPath}`;
         sources.push(fileSrc);
         return sources;
       };
 
-      const trySource = (path, src, index) =>
+      const trySource = (src) =>
         new Promise((resolve) => {
+          const cleanup = () => {
+            imageEl.onload = null;
+            imageEl.onerror = null;
+          };
           imageEl.onload = () => {
+            cleanup();
             imageContainer.classList.remove('placeholder');
             placeholderEl.textContent = '';
             resolve(true);
           };
           imageEl.onerror = () => {
-            console.warn('Image load failed', { path, src, index });
+            cleanup();
             resolve(false);
           };
           imageEl.src = src;
@@ -82,15 +83,15 @@
         }
         const sources = buildSources(path);
         for (let i = 0; i < sources.length; i += 1) {
-          const ok = await trySource(path, sources[i], i);
+          const ok = await trySource(sources[i]);
           if (ok) return;
         }
         try {
           const dataUrl = await invoke('load_image_data', { path });
-          const ok = await trySource(path, dataUrl, sources.length);
+          const ok = await trySource(dataUrl);
           if (ok) return;
         } catch (err) {
-          console.warn('load_image_data failed', { path, err });
+          console.warn('Image fallback failed', err);
         }
         showPlaceholder('Image unavailable');
       };
@@ -114,7 +115,6 @@
         tauri.event
           .listen('file-selected', async (event) => {
             const path = event?.payload?.path ?? event?.payload ?? null;
-            console.debug('file-selected event', { path });
             if (path) {
               await showImage(path);
             } else {
