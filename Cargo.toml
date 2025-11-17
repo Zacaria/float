@@ -2,8 +2,8 @@
 name = "always-on-top"
 version = "0.1.0"
 edition = "2021"
-description = "Minimal macOS utility to keep a window always on top."
-authors = ["Always On Top Team"]
+description = "Float - minimal utility to keep a window always on top."
+authors = ["Float Team"]
 
 [dependencies]
 # Windowing/event loop for macOS GUI
@@ -18,8 +18,8 @@ serde_json = "1"
 directories = "5"
 
 [package.metadata.bundle]
-name = "Always On Top"
-identifier = "com.example.always-on-top"
+name = "Float"
+identifier = "com.havesomecode.float"
 icon = []
 resources = []
 category = "public.app-category.utilities"

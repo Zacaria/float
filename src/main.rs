@@ -1,11 +1,12 @@
 #![allow(unexpected_cfgs)] // Allow objc macro cfg probes under clippy
 
 use std::fs;
-use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::io::{Read, Write};
 use std::process::Command;
 use std::thread;
 
+use directories::{BaseDirs, ProjectDirs};
 use winit::dpi::LogicalSize;
 use winit::event::{
     ElementState, Event, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent,
@@ -52,14 +53,56 @@ struct PersistedState {
     window_h: Option<f64>,
 }
 
-fn config_path() -> Option<std::path::PathBuf> {
-    if let Some(proj) = directories::ProjectDirs::from("com", "example", "Always On Top") {
-        let mut p = proj.config_dir().to_path_buf();
-        p.push("settings.json");
-        Some(p)
-    } else {
-        None
+const APP_NAME: &str = "Float";
+const APP_ORG: &str = "havesomecode";
+const LEGACY_APP_NAME: &str = "Always On Top";
+const LEGACY_IDENTIFIER: &str = "com.example.always-on-top";
+
+fn legacy_config_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(proj) = ProjectDirs::from("com", "example", LEGACY_APP_NAME) {
+        candidates.push(proj.config_dir().join("settings.json"));
     }
+    if let Some(base) = BaseDirs::new() {
+        candidates.push(
+            base.config_dir()
+                .join(LEGACY_IDENTIFIER)
+                .join("settings.json"),
+        );
+        candidates.push(
+            base.config_dir()
+                .join(LEGACY_APP_NAME)
+                .join("settings.json"),
+        );
+    }
+    candidates
+}
+
+fn config_path() -> Option<std::path::PathBuf> {
+    let proj = ProjectDirs::from("com", APP_ORG, APP_NAME)?;
+    let mut p = proj.config_dir().to_path_buf();
+    if let Err(err) = fs::create_dir_all(&p) {
+        eprintln!("failed to create config dir {}: {err}", p.display());
+        return None;
+    }
+    p.push("settings.json");
+    if !p.exists() {
+        for candidate in legacy_config_candidates() {
+            if candidate.exists() {
+                if let Some(dir) = p.parent() {
+                    let _ = fs::create_dir_all(dir);
+                }
+                if let Err(err) = fs::copy(&candidate, &p) {
+                    eprintln!(
+                        "failed to migrate legacy settings from {}: {err}",
+                        candidate.display()
+                    );
+                }
+                break;
+            }
+        }
+    }
+    Some(p)
 }
 
 fn load_persisted() -> Option<PersistedState> {
@@ -196,7 +239,7 @@ mod macos_menu {
         let _: () = msg_send![settings_item, setTarget: handler];
         app_menu.addItem_(settings_item);
 
-        let quit_title = NSString::alloc(nil).init_str("Quit Always On Top");
+        let quit_title = NSString::alloc(nil).init_str("Quit Float");
         let quit_key = NSString::alloc(nil).init_str("q");
         let quit_item = NSMenuItem::alloc(nil)
             .initWithTitle_action_keyEquivalent_(quit_title, sel!(terminate:), quit_key)
@@ -462,7 +505,7 @@ fn main() {
         }
     }
     let window = WindowBuilder::new()
-        .with_title("Always On Top")
+        .with_title("Float")
         .with_inner_size(LogicalSize::new(420.0, 120.0))
         .build(&event_loop)
         .expect("Failed to create window");

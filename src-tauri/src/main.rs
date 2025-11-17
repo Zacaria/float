@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use base64::{engine::general_purpose, Engine};
+use directories::{BaseDirs, ProjectDirs};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -61,6 +62,25 @@ struct AppState {
     window_counter: AtomicUsize,
 }
 
+const LEGACY_APP_NAME: &str = "Always On Top";
+const LEGACY_IDENTIFIER: &str = "com.example.always-on-top";
+
+fn legacy_settings_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(proj) = ProjectDirs::from("com", "example", LEGACY_APP_NAME) {
+        candidates.push(proj.config_dir().to_path_buf().join("settings.json"));
+    }
+    if let Some(base) = BaseDirs::new() {
+        candidates.push(
+            base.config_dir()
+                .join(LEGACY_IDENTIFIER)
+                .join("settings.json"),
+        );
+        candidates.push(base.config_dir().join(LEGACY_APP_NAME).join("settings.json"));
+    }
+    candidates
+}
+
 fn is_image_path(path: &str) -> bool {
     let ext = PathBuf::from(path)
         .extension()
@@ -103,7 +123,16 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, Error> {
     if !dir.exists() {
         fs::create_dir_all(&dir)?;
     }
-    Ok(dir.join("settings.json"))
+    let dest = dir.join("settings.json");
+    if !dest.exists() {
+        for candidate in legacy_settings_candidates() {
+            if candidate.exists() {
+                let _ = fs::copy(&candidate, &dest);
+                break;
+            }
+        }
+    }
+    Ok(dest)
 }
 
 fn load_state(app: &AppHandle) -> PersistedState {
@@ -161,7 +190,7 @@ fn spawn_empty_window(app: &AppHandle) -> Result<(), Error> {
         next_window_label(app),
         WebviewUrl::App("index.html".into()),
     )
-    .title("Always On Top")
+    .title("Float")
     .visible(true)
     .resizable(true)
     .decorations(false)
@@ -241,7 +270,7 @@ fn apply_active_file(app: &AppHandle, window: &WebviewWindow, selection: &Select
     }
     let path = PathBuf::from(&path_str);
     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-        let _ = window.set_title(&format!("Always On Top — {}", name));
+        let _ = window.set_title(&format!("Float — {}", name));
     }
 
     // Cache aspect ratio per window
@@ -591,19 +620,22 @@ fn pick_files(app: &AppHandle, parent: Option<&WebviewWindow>) -> Vec<String> {
 
 fn pick_and_apply_selection(app: AppHandle, target: SelectionTarget) -> Option<String> {
     // For automation, allow bypassing the native dialog with a predefined path.
-    if let Ok(test_path) = std::env::var("AOT_TEST_PATH") {
-        if test_path.is_empty() {
-            return None;
-        }
-        match target {
-            SelectionTarget::CurrentWindow => {
-                if let Some(win) = focused_window(&app) {
-                    return apply_selection(&app, &win, vec![test_path]);
+    if let Ok(test_path) = std::env::var("FLOAT_TEST_PATH")
+        .or_else(|_| std::env::var("AOT_TEST_PATH"))
+    {
+        if !test_path.is_empty() {
+            match target {
+                SelectionTarget::CurrentWindow => {
+                    if let Some(win) = focused_window(&app) {
+                        return apply_selection(&app, &win, vec![test_path]);
+                    }
+                }
+                SelectionTarget::NewWindow => {
+                    return spawn_new_window_with_files(&app, vec![test_path]);
                 }
             }
-            SelectionTarget::NewWindow => {
-                return spawn_new_window_with_files(&app, vec![test_path]);
-            }
+        } else {
+            return None;
         }
     }
 
@@ -655,7 +687,7 @@ fn spawn_new_window_with_files(app: &AppHandle, files: Vec<String>) -> Option<St
         &label,
         WebviewUrl::App("index.html".into()),
     )
-    .title("Always On Top")
+    .title("Float")
     .visible(true)
     .resizable(true)
     .decorations(false)

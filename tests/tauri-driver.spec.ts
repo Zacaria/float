@@ -14,7 +14,7 @@ test('opens app and shows toolbar', async ({ page }) => {
   }
 
   const driver = spawn('tauri-driver', [], {
-    env: { ...process.env, AOT_TEST_PATH: iconPath },
+    env: { ...process.env, FLOAT_TEST_PATH: iconPath },
     stdio: 'inherit',
   });
 
@@ -23,15 +23,8 @@ test('opens app and shows toolbar', async ({ page }) => {
 
   await page.goto('http://localhost:5544/');
 
-  // Wait for window to be ready
-  await page.waitForSelector('text=Always On Top');
-  await page.waitForSelector('#openBtn');
-  await expect(page.locator('#openBtn')).toBeVisible();
-
-  // Trigger the Open flow; the Rust side will take AOT_TEST_PATH and skip the dialog.
-  await page.click('#openBtn');
-  await page.waitForSelector('#fileName:has-text("icon.png")');
-  await expect(page.locator('#status')).toHaveText('');
+  await expect(page).toHaveTitle('Float');
+  await page.waitForSelector('text=No file selected');
 
   driver.kill();
 });

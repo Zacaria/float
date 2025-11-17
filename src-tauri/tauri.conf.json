@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Always On Top",
+  "productName": "Float",
   "version": "0.1.0",
-  "identifier": "com.example.always-on-top",
+  "identifier": "com.havesomecode.float",
   "build": {
     "beforeBuildCommand": "",
     "beforeDevCommand": "",
@@ -19,7 +19,7 @@
     },
     "windows": [
       {
-        "title": "Always On Top",
+        "title": "Float",
         "label": "main",
         "width": 800,
         "height": 600,

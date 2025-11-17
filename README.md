@@ -1,4 +1,4 @@
-# Always On Top
+# Float
 
 A tiny always-on-top image viewer built in Rust with a Tauri shell for macOS and Windows (Linux dev-only for now). It pins the window above other apps, lets you open an image, and auto-fits the window to the image. Behavior is defined in OpenSpec (see `openspec/specs/`).
 
@@ -36,8 +36,8 @@ just tauri-dev            # Runs Tauri in dev mode
 just tauri-build          # macOS .app + Windows NSIS installer
 ```
 Artifacts:
-- macOS app bundle: `src-tauri/target/release/bundle/macos/Always On Top.app`
-- Windows NSIS installer: `src-tauri/target/release/bundle/nsis/Always On Top_*.exe`
+- macOS app bundle: `src-tauri/target/release/bundle/macos/Float.app`
+- Windows NSIS installer: `src-tauri/target/release/bundle/nsis/Float_*.exe`
 
 To open the built macOS app locally:
 ```sh
@@ -59,7 +59,7 @@ just bundle-run           # cargo bundle --release (macOS .app)
 1) Ensure `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo check` pass.
 2) Release automation: `.github/workflows/release-plz.yml` (runs on `main` pushes or manual dispatch) uses `release-plz` to update `CHANGELOG.md`, bump versions, tag with `v*`, and create the GitHub Release (no crates.io publish).
 3) Bundles on tags: `.github/workflows/release-bundles.yml` builds on `v*` tags (or manual dispatch), uploads build artifacts as workflow artifacts, and publishes/updates the GitHub Release with the macOS zip + Windows installer.
-4) Local build sanity (optional): `just tauri-build`; collect artifacts from `src-tauri/target/release/bundle/macos/Always On Top.app` and `src-tauri/target/release/bundle/nsis/Always On Top_*.exe`.
+4) Local build sanity (optional): `just tauri-build`; collect artifacts from `src-tauri/target/release/bundle/macos/Float.app` and `src-tauri/target/release/bundle/nsis/Float_*.exe`.
 5) Draft release notes summarizing changes and link relevant OpenSpec change IDs (release-plz populates the changelog automatically).
 
 ## Troubleshooting

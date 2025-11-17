@@ -1,8 +1,8 @@
 [package]
 name = "always-on-top-tauri"
 version = "0.1.0"
-description = "Always On Top - Tauri shell"
-authors = ["You"]
+description = "Float - Tauri shell"
+authors = ["Float Team"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
 
@@ -19,6 +19,7 @@ parking_lot = "0.12"
 tauri-plugin-dialog = "2"
 base64 = "0.21"
 tokio = { version = "1", features = ["time"] }
+directories = "5"
 
 [features]
 default = ["custom-protocol"]

@@ -1,6 +1,6 @@
 set shell := ["bash", "-uc"]
 
-APP := "target/release/bundle/osx/Always On Top.app"
+APP := "target/release/bundle/osx/Float.app"
 BUNDLE_VERSION := "0.6.0"
 
 # Install cargo-bundle in a known-good version
@@ -37,7 +37,7 @@ tauri-build:
 # Open built macOS .app from Tauri
 tauri-open:
 	set -euo pipefail
-	APP_TAURI="src-tauri/target/release/bundle/macos/Always On Top.app"
+	APP_TAURI="src-tauri/target/release/bundle/macos/Float.app"
 	if [ -d "$APP_TAURI" ]; then open "$APP_TAURI"; else echo "App not found: $APP_TAURI" >&2; exit 1; fi
 
 # Run release-plz to bump versions, create tag, and push branch+tags
