@@ -3,27 +3,20 @@
 ## Purpose
 TBD - created by archiving change create-macos-keep-on-top-app. Update Purpose after archive.
 ## Requirements
-### Requirement: Native file selection
-The application MUST let the user choose a file using the operating system’s native file dialog on macOS and Windows.
+### Requirement: Native file selection via Tauri dialog plugin
+The application MUST use the Tauri dialog plugin to present the operating system’s native file picker when selecting a file, preserving current title updates and cancellation behavior.
 
-#### Scenario: User selects a file on macOS
-- Given the app is running on macOS
-- And the app presents a file dialog
-- When the user selects a file and confirms
+#### Scenario: Select file using Tauri dialog plugin
+- Given the user triggers file selection from the app
+- When the Tauri dialog plugin opens the native picker and the user chooses a file
 - Then the app records the absolute path of the selected file
-- And the app updates the window title to include the selected file name
+- And the window title updates to include the selected file name
 
-#### Scenario: User selects a file on Windows
-- Given the app presents a file dialog on Windows
-- When the user selects a file and confirms
-- Then the app records the absolute path of the selected file
-- And the app updates the window title to include the selected file name
-
-#### Scenario: User cancels file selection
-- Given the app presents a file dialog
+#### Scenario: Cancel file selection via Tauri dialog plugin
+- Given the Tauri dialog plugin has opened the native picker
 - When the user cancels the dialog
 - Then the app keeps running without a selected file
-- And the window title remains the default
+- And the window title remains unchanged
 
 ### Requirement: Native file selection triggers auto-fit
 When the user selects a file using the native file dialog and the Fit window to image setting is enabled, the window MUST auto-fit to the selected image.

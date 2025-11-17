@@ -6,4 +6,4 @@
 ## 2. Validation
 - [x] 2.1 Run `cargo fmt` and `cargo clippy` for both crates.
 - [x] 2.2 Run `cargo check` (workspace) and `cargo check --manifest-path src-tauri/Cargo.toml`.
-- [ ] 2.3 Manual sanity: launch via `cargo tauri dev`, confirm no in-window command buttons/checkboxes, menu items perform Open/Fit/Quick Look, and menu toggles for Auto-fit/Aspect Lock update/reflect state.
+- [x] 2.3 Manual sanity: launch via `cargo tauri dev`, confirm no in-window command buttons/checkboxes, menu items perform Open/Fit/Quick Look, and menu toggles for Auto-fit/Aspect Lock update/reflect state.
