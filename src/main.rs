@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
+use std::fs;
+use std::io::{Read, Write};
 
 use winit::dpi::LogicalSize;
-use winit::event::{Event, WindowEvent};
+use winit::event::{Event, WindowEvent, ElementState, KeyboardInput, VirtualKeyCode, ModifiersState};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy};
 use winit::window::{WindowBuilder, WindowLevel};
 
@@ -17,6 +19,7 @@ enum UserEvent {
     RestoreTop,
     OpenSettings,
     ApplySettings,
+    FitNow,
 }
 
 static EVENT_PROXY: Lazy<Mutex<Option<EventLoopProxy<UserEvent>>>> = Lazy::new(|| Mutex::new(None));
@@ -35,11 +38,64 @@ static SETTINGS: Lazy<Mutex<Settings>> = Lazy::new(|| Mutex::new(Settings {
 static IMAGE_ASPECT: Lazy<Mutex<Option<f64>>> = Lazy::new(|| Mutex::new(None));
 static RESIZE_GUARD: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PersistedState {
+    fit_window: bool,
+    aspect_lock: bool,
+    last_file: Option<String>,
+    window_w: Option<f64>,
+    window_h: Option<f64>,
+}
+
+fn config_path() -> Option<std::path::PathBuf> {
+    if let Some(proj) = directories::ProjectDirs::from("com", "example", "Always On Top") {
+        let mut p = proj.config_dir().to_path_buf();
+        p.push("settings.json");
+        Some(p)
+    } else {
+        None
+    }
+}
+
+fn load_persisted() -> Option<PersistedState> {
+    let path = config_path()?;
+    let mut s = String::new();
+    if let Ok(mut f) = fs::File::open(path) {
+        if f.read_to_string(&mut s).is_ok() {
+            if let Ok(st) = serde_json::from_str::<PersistedState>(&s) {
+                return Some(st);
+            }
+        }
+    }
+    None
+}
+
+fn save_persisted(selected: Option<&PathBuf>, window: &winit::window::Window) {
+    let path = match config_path() { Some(p) => p, None => return };
+    if let Some(dir) = path.parent() { let _ = fs::create_dir_all(dir); }
+    let (fit_window, aspect_lock) = {
+        let s = SETTINGS.lock().ok();
+        if let Some(s) = s { (s.fit_window, s.aspect_lock) } else { (false, false) }
+    };
+    let last_file = selected.and_then(|p| p.to_str().map(|s| s.to_string()));
+    // Persist current window logical size
+    let sf = window.scale_factor();
+    let size = window.inner_size();
+    let window_w = Some(size.width as f64 / sf);
+    let window_h = Some(size.height as f64 / sf);
+    let state = PersistedState { fit_window, aspect_lock, last_file, window_w, window_h };
+    if let Ok(data) = serde_json::to_string_pretty(&state) {
+        if let Ok(mut f) = fs::File::create(path) {
+            let _ = f.write_all(data.as_bytes());
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod macos_menu {
     use super::{UserEvent, EVENT_PROXY};
     use cocoa::appkit::{NSApp, NSApplication, NSApplicationActivationPolicy, NSMenu, NSMenuItem};
-    use cocoa::base::nil;
+    use cocoa::base::{nil, YES};
     use cocoa::foundation::{NSAutoreleasePool, NSString};
     use objc::declare::ClassDecl;
     use objc::runtime::{Object, Sel};
@@ -67,13 +123,20 @@ mod macos_menu {
         }
     }
 
-    unsafe fn get_handler_instance() -> *mut Object {
+    extern "C" fn rust_fit_now(_this: &Object, _sel: Sel, _sender: *mut Object) {
+        if let Some(proxy) = EVENT_PROXY.lock().ok().and_then(|g| g.as_ref().cloned()) {
+            let _ = proxy.send_event(UserEvent::FitNow);
+        }
+    }
+
+    pub unsafe fn get_handler_instance() -> *mut Object {
         INIT.call_once(|| {
             // Register class
             let superclass = class!(NSObject);
             let mut decl = ClassDecl::new("RustMenuHandler", superclass).unwrap();
             decl.add_method(sel!(rustOpenFile:), rust_open_file as extern "C" fn(&Object, Sel, *mut Object));
             decl.add_method(sel!(rustQuickLook:), rust_quick_look as extern "C" fn(&Object, Sel, *mut Object));
+            decl.add_method(sel!(rustFitNow:), rust_fit_now as extern "C" fn(&Object, Sel, *mut Object));
             decl.add_method(sel!(rustOpenSettings:), rust_open_settings as extern "C" fn(&Object, Sel, *mut Object));
             let cls = decl.register();
             let obj: *mut Object = msg_send![cls, new];
@@ -95,6 +158,8 @@ mod macos_menu {
         menubar.addItem_(file_menu_item);
         menubar.addItem_(view_menu_item);
         app.setMainMenu_(menubar);
+        // Ensure app becomes active so menu is accessible
+        app.activateIgnoringOtherApps_(YES);
 
         // App menu (Settings…, Quit)
         let app_menu = NSMenu::new(nil).autorelease();
@@ -127,8 +192,16 @@ mod macos_menu {
         file_menu.addItem_(open_item);
         file_menu_item.setSubmenu_(file_menu);
 
-        // View menu (Quick Look Cmd+Y)
+        // View menu (Fit Now Cmd+F, Quick Look Cmd+Y)
         let view_menu = NSMenu::new(nil).autorelease();
+        // Fit to Image Now
+        let fit_title = NSString::alloc(nil).init_str("Fit to Image Now");
+        let f_key = NSString::alloc(nil).init_str("f");
+        let fit_item = NSMenuItem::alloc(nil)
+            .initWithTitle_action_keyEquivalent_(fit_title, sel!(rustFitNow:), f_key)
+            .autorelease();
+        let _: () = msg_send![fit_item, setTarget: handler];
+        view_menu.addItem_(fit_item);
         let ql_title = NSString::alloc(nil).init_str("Quick Look");
         let y_key = NSString::alloc(nil).init_str("y");
         let ql_item = NSMenuItem::alloc(nil)
@@ -230,6 +303,7 @@ mod macos_image {
 #[cfg(target_os = "macos")]
 mod macos_settings {
     use super::{UserEvent, EVENT_PROXY, SETTINGS};
+    use super::macos_menu::get_handler_instance;
     use cocoa::appkit::{NSButton, NSView};
     use cocoa::base::nil;
     use cocoa::foundation::{NSPoint, NSRect, NSSize, NSString};
@@ -241,53 +315,111 @@ mod macos_settings {
         let title = NSString::alloc(nil).init_str("Settings");
         let _: () = msg_send![alert, setMessageText: title];
         let ok = NSString::alloc(nil).init_str("OK");
-        let _: () = msg_send![alert, addButtonWithTitle: ok];
+        let _: *mut Object = msg_send![alert, addButtonWithTitle: ok];
+        // Add a Cancel button with Escape key equivalent
+        let cancel = NSString::alloc(nil).init_str("Cancel");
+        let cancel_btn: *mut Object = msg_send![alert, addButtonWithTitle: cancel];
+        let esc = NSString::alloc(nil).init_str("\u{1b}");
+        let _: () = msg_send![cancel_btn, setKeyEquivalent: esc];
 
-        // Accessory view with two checkboxes
-        let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(280.0, 70.0));
+        // Accessory view with a tabbed interface: General and Shortcuts
+        let acc_frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 180.0));
         let accessory: *mut Object = msg_send![class!(NSView), alloc];
-        let accessory: *mut Object = msg_send![accessory, initWithFrame: frame];
+        let accessory: *mut Object = msg_send![accessory, initWithFrame: acc_frame];
 
-        // Fit window to image checkbox
-        let cb1: *mut Object = msg_send![class!(NSButton), alloc];
-        let cb1: *mut Object = msg_send![cb1, initWithFrame: NSRect::new(NSPoint::new(0.0, 40.0), NSSize::new(280.0, 24.0))];
-        let t1 = NSString::alloc(nil).init_str("Fit window to image");
-        let _: () = msg_send![cb1, setTitle: t1];
-        // NSButtonTypeSwitch = 3
-        let _: () = msg_send![cb1, setButtonType: 3_i64];
+        // Create NSTabView
+        let tab: *mut Object = msg_send![class!(NSTabView), alloc];
+        let tab: *mut Object = msg_send![tab, initWithFrame: acc_frame];
+
+        // General tab content
+        let general_view: *mut Object = msg_send![class!(NSView), alloc];
+        let general_view: *mut Object = msg_send![general_view, initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 150.0))];
+
+        // Fit Now button
+        let btn: *mut Object = msg_send![class!(NSButton), alloc];
+        let btn: *mut Object = msg_send![btn, initWithFrame: NSRect::new(NSPoint::new(16.0, 92.0), NSSize::new(380.0, 28.0))];
+        let t1 = NSString::alloc(nil).init_str("Fit Window to Image Now");
+        let _: () = msg_send![btn, setTitle: t1];
+        let _: () = msg_send![btn, setButtonType: 1_i64]; // momentary push
+        let handler = get_handler_instance();
+        let _: () = msg_send![btn, setTarget: handler];
+        let _: () = msg_send![btn, setAction: sel!(rustFitNow:)];
+        let _: () = msg_send![general_view, addSubview: btn];
 
         // Lock aspect ratio checkbox
         let cb2: *mut Object = msg_send![class!(NSButton), alloc];
-        let cb2: *mut Object = msg_send![cb2, initWithFrame: NSRect::new(NSPoint::new(0.0, 12.0), NSSize::new(280.0, 24.0))];
+        let cb2: *mut Object = msg_send![cb2, initWithFrame: NSRect::new(NSPoint::new(16.0, 56.0), NSSize::new(380.0, 24.0))];
         let t2 = NSString::alloc(nil).init_str("Lock aspect ratio on resize");
         let _: () = msg_send![cb2, setTitle: t2];
-        let _: () = msg_send![cb2, setButtonType: 3_i64];
-
-        // Initialize states from current settings
+        let _: () = msg_send![cb2, setButtonType: 3_i64]; // switch
         if let Ok(s) = SETTINGS.lock() {
-            let fit_state: i64 = if s.fit_window { 1 } else { 0 };
             let aspect_state: i64 = if s.aspect_lock { 1 } else { 0 };
-            let _: () = msg_send![cb1, setState: fit_state];
             let _: () = msg_send![cb2, setState: aspect_state];
         }
+        let _: () = msg_send![general_view, addSubview: cb2];
 
-        let _: () = msg_send![accessory, addSubview: cb1];
-        let _: () = msg_send![accessory, addSubview: cb2];
-        let _: () = msg_send![alert, setAccessoryView: accessory];
+        // Build "General" tab item
+        let general_item: *mut Object = msg_send![class!(NSTabViewItem), alloc];
+        let general_item: *mut Object = msg_send![general_item, initWithIdentifier: nil];
+        let label1 = NSString::alloc(nil).init_str("General");
+        let _: () = msg_send![general_item, setLabel: label1];
+        let _: () = msg_send![general_item, setView: general_view];
 
-        let _: i64 = msg_send![alert, runModal];
+        // Shortcuts tab content
+        let sc_view: *mut Object = msg_send![class!(NSView), alloc];
+        let sc_view: *mut Object = msg_send![sc_view, initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(420.0, 150.0))];
 
-        // Read states back and apply
-        let s1: i64 = msg_send![cb1, state];
-        let s2: i64 = msg_send![cb2, state];
-        if let Ok(mut s) = SETTINGS.lock() {
-            s.fit_window = s1 != 0;
-            s.aspect_lock = s2 != 0;
+        // Helper to add a label
+        let make_label = |y: f64, text: &str| -> *mut Object {
+            let tf: *mut Object = unsafe { msg_send![class!(NSTextField), alloc] };
+            let tf: *mut Object = unsafe { msg_send![tf, initWithFrame: NSRect::new(NSPoint::new(16.0, y), NSSize::new(380.0, 20.0))] };
+            let s = unsafe { NSString::alloc(nil).init_str(text) };
+            unsafe {
+                let _: () = msg_send![tf, setStringValue: s];
+                let _: () = msg_send![tf, setBezeled: 0_i32];
+                let _: () = msg_send![tf, setDrawsBackground: 0_i32];
+                let _: () = msg_send![tf, setEditable: 0_i32];
+                let _: () = msg_send![tf, setSelectable: 0_i32];
+            }
+            tf
+        };
+
+        // Add shortcut rows
+        let row1 = make_label(110.0, "Cmd+,  — Open Settings");
+        let row2 = make_label(88.0,  "Cmd+O  — Open File…");
+        let row3 = make_label(66.0,  "Cmd+Y  — Quick Look");
+        unsafe {
+            let _: () = msg_send![sc_view, addSubview: row1];
+            let _: () = msg_send![sc_view, addSubview: row2];
+            let _: () = msg_send![sc_view, addSubview: row3];
         }
 
-        // Notify app to apply settings (e.g., fit window now)
-        if let Some(proxy) = EVENT_PROXY.lock().ok().and_then(|g| g.as_ref().cloned()) {
-            let _ = proxy.send_event(UserEvent::ApplySettings);
+        // Build "Shortcuts" tab item
+        let sc_item: *mut Object = msg_send![class!(NSTabViewItem), alloc];
+        let sc_item: *mut Object = msg_send![sc_item, initWithIdentifier: nil];
+        let label2 = NSString::alloc(nil).init_str("Shortcuts");
+        let _: () = msg_send![sc_item, setLabel: label2];
+        let _: () = msg_send![sc_item, setView: sc_view];
+
+        // Add items to tab view
+        let _: () = msg_send![tab, addTabViewItem: general_item];
+        let _: () = msg_send![tab, addTabViewItem: sc_item];
+        let _: () = msg_send![accessory, addSubview: tab];
+        let _: () = msg_send![alert, setAccessoryView: accessory];
+
+        let response: i64 = msg_send![alert, runModal];
+
+        // Only apply settings if OK (first button) was pressed.
+        if response == 1000 {
+            // Read states back and apply
+            let s2: i64 = msg_send![cb2, state];
+            if let Ok(mut s) = SETTINGS.lock() {
+                s.aspect_lock = s2 != 0;
+            }
+            // Notify app to apply settings (e.g., re-layout effects)
+            if let Some(proxy) = EVENT_PROXY.lock().ok().and_then(|g| g.as_ref().cloned()) {
+                let _ = proxy.send_event(UserEvent::ApplySettings);
+            }
         }
     }
 }
@@ -314,8 +446,36 @@ fn main() {
         macos_menu::install_menubar();
     }
 
-    // Ask the user to select a file immediately on launch.
-    let mut selected: Option<PathBuf> = open_file_dialog_and_set_title(&window);
+    // Load persisted settings and last file (if any)
+    let mut selected: Option<PathBuf> = None;
+    if let Some(st) = load_persisted() {
+        if let Ok(mut s) = SETTINGS.lock() {
+            s.fit_window = st.fit_window;
+            s.aspect_lock = st.aspect_lock;
+        }
+        // Restore window size first (logical points)
+        if let (Some(w), Some(h)) = (st.window_w, st.window_h) {
+            if w > 0.0 && h > 0.0 {
+                window.set_inner_size(LogicalSize::new(w, h));
+            }
+        }
+        if let Some(p) = st.last_file.and_then(|s| {
+            let pb = PathBuf::from(s);
+            if pb.exists() { Some(pb) } else { None }
+        }) {
+            // Restore last file
+            let title = match p.file_name().and_then(|n| n.to_str()) {
+                Some(name) => format!("Pinned: {}", name),
+                None => "Pinned: <unnamed>".to_string(),
+            };
+            window.set_title(&title);
+            selected = Some(p);
+        }
+    }
+    // If no file restored, ask the user to select a file immediately on launch.
+    if selected.is_none() {
+        selected = open_file_dialog_and_set_title(&window);
+    }
     #[cfg(target_os = "macos")]
     if let Some(ref p) = selected {
         unsafe {
@@ -324,15 +484,14 @@ fn main() {
                 if aspect > 0.0 {
                     if let Ok(mut a) = IMAGE_ASPECT.lock() { *a = Some(aspect); }
                 }
-                if let Ok(s) = SETTINGS.lock() { if s.fit_window {
-                    let (cw, ch) = macos_image::clamp_to_screen(&window, w, h);
-                    window.set_inner_size(LogicalSize::new(cw, ch));
-                }}
             }
         }
     }
+    // Persist initial state after potential restoration/selection.
+    save_persisted(selected.as_ref(), &window);
 
     // Basic event loop: keep running until the user closes the window.
+    let mut mods: ModifiersState = ModifiersState::empty();
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
@@ -340,11 +499,66 @@ fn main() {
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
                 }
+                WindowEvent::ModifiersChanged(m) => {
+                    mods = m;
+                }
+                WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(key), state: ElementState::Pressed, .. }, .. } => {
+                    // Keyboard fallbacks for menu shortcuts on macOS
+                    if mods.logo() {
+                        match key {
+                            VirtualKeyCode::Comma => {
+                                #[cfg(target_os = "macos")]
+                                unsafe { macos_settings::show_settings_modal(); }
+                                // Apply settings and persist
+                                save_persisted(selected.as_ref(), &window);
+                            }
+                            VirtualKeyCode::O => {
+                                selected = open_file_dialog_and_set_title(&window);
+                                #[cfg(target_os = "macos")]
+                                if let Some(ref p) = selected {
+                                    unsafe {
+                                        if let Some((w, h)) = macos_image::set_image(&window, p) {
+                                            let aspect = if h > 0.0 { w / h } else { 0.0 };
+                                            if aspect > 0.0 {
+                                                if let Ok(mut a) = IMAGE_ASPECT.lock() { *a = Some(aspect); }
+                                            }
+                                            if let Ok(s) = SETTINGS.lock() { if s.fit_window {
+                                                let (cw, ch) = macos_image::clamp_to_screen(&window, w, h);
+                                                window.set_inner_size(LogicalSize::new(cw, ch));
+                                            }}
+                                        }
+                                    }
+                                }
+                                save_persisted(selected.as_ref(), &window);
+                            }
+                            VirtualKeyCode::Y => {
+                                if let Some(path) = selected.as_ref() {
+                                    window.set_window_level(WindowLevel::Normal);
+                                    quick_look(path.clone());
+                                }
+                            }
+                            VirtualKeyCode::F => {
+                                // Trigger Fit Now action
+                                #[cfg(target_os = "macos")]
+                                unsafe {
+                                    if let Some((w, h)) = macos_image::last_image_size() {
+                                        let (cw, ch) = macos_image::clamp_to_screen(&window, w, h);
+                                        window.set_inner_size(LogicalSize::new(cw, ch));
+                                    }
+                                }
+                                save_persisted(selected.as_ref(), &window);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 WindowEvent::Resized(new_size) => {
                     #[cfg(target_os = "macos")]
                     unsafe {
                         macos_image::layout_image_view(&window);
                     }
+                    // Persist new window size
+                    save_persisted(selected.as_ref(), &window);
                     // Enforce aspect ratio if enabled
                     if let Ok(s) = SETTINGS.lock() {
                         if s.aspect_lock {
@@ -394,13 +608,10 @@ fn main() {
                             if aspect > 0.0 {
                                 if let Ok(mut a) = IMAGE_ASPECT.lock() { *a = Some(aspect); }
                             }
-                            if let Ok(s) = SETTINGS.lock() { if s.fit_window {
-                                let (cw, ch) = macos_image::clamp_to_screen(&window, w, h);
-                                window.set_inner_size(LogicalSize::new(cw, ch));
-                            }}
                         }
                     }
                 }
+                save_persisted(selected.as_ref(), &window);
             }
             Event::UserEvent(UserEvent::QuickLook) => {
                 if let Some(path) = selected.as_ref() {
@@ -416,15 +627,19 @@ fn main() {
             Event::UserEvent(UserEvent::ApplySettings) => {
                 #[cfg(target_os = "macos")]
                 unsafe {
-                    if let Ok(s) = SETTINGS.lock() {
-                        if s.fit_window {
-                            if let Some((w, h)) = macos_image::last_image_size() {
-                                let (cw, ch) = macos_image::clamp_to_screen(&window, w, h);
-                                window.set_inner_size(LogicalSize::new(cw, ch));
-                            }
-                        }
+                    // No auto-fit here anymore; only aspect_lock takes effect.
+                }
+                save_persisted(selected.as_ref(), &window);
+            }
+            Event::UserEvent(UserEvent::FitNow) => {
+                #[cfg(target_os = "macos")]
+                unsafe {
+                    if let Some((w, h)) = macos_image::last_image_size() {
+                        let (cw, ch) = macos_image::clamp_to_screen(&window, w, h);
+                        window.set_inner_size(LogicalSize::new(cw, ch));
                     }
                 }
+                save_persisted(selected.as_ref(), &window);
             }
             Event::UserEvent(UserEvent::RestoreTop) => {
                 window.set_window_level(WindowLevel::AlwaysOnTop);
@@ -432,6 +647,7 @@ fn main() {
             Event::LoopDestroyed => {
                 // Drop selected path if any (no-op but explicit ownership end).
                 let _ = &selected;
+                save_persisted(selected.as_ref(), &window);
             }
             _ => {}
         }

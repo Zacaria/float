@@ -1,8 +1,5 @@
-# menu-and-shortcuts Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change create-macos-keep-on-top-app. Update Purpose after archive.
-## Requirements
 ### Requirement: Menu and keyboard shortcuts
 The application MUST include a View menu item "Fit to Image Now" with shortcut Cmd+F that triggers the manual fit action.
 
