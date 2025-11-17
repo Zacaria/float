@@ -4,10 +4,15 @@
 TBD - created by archiving change create-macos-keep-on-top-app. Update Purpose after archive.
 ## Requirements
 ### Requirement: Window stays always on top
-The application window MUST remain above other application windows while it is open.
+The application window MUST remain above other application windows while it is open on macOS and Windows.
 
-#### Scenario: Window is created
-- Given the app creates its main window
+#### Scenario: Always-on-top on macOS
+- Given the app creates its main window on macOS
+- When the window appears
+- Then the window is configured as always-on-top by default
+
+#### Scenario: Always-on-top on Windows
+- Given the app creates its main window on Windows
 - When the window appears
 - Then the window is configured as always-on-top by default
 

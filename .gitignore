@@ -1,5 +1,6 @@
 # Rust / Cargo
 /target/
+src-tauri/target/
 **/*.rs.bk
 
 # macOS
@@ -17,4 +18,3 @@
 
 # If creating a library, you may want to ignore Cargo.lock
 # Cargo.lock
-

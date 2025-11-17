@@ -4,15 +4,10 @@
 TBD - created by archiving change persist-settings-and-last-file. Update Purpose after archive.
 ## Requirements
 ### Requirement: Persist settings to JSON
-The application MUST persist the values of “Fit window to image” and “Lock aspect ratio on resize” to a JSON file under the user’s configuration directory and load them on startup.
+The application MUST persist the values of “Fit window to image” and “Lock aspect ratio on resize” to a JSON file. If no persisted value exists, “Fit window to image” MUST default to enabled.
 
-#### Scenario: Load settings on startup
-- Given the user has previously changed settings
-- When the application starts
-- Then the settings are loaded from the JSON file and applied immediately
-
-#### Scenario: Save settings on change
-- Given the settings panel is open
-- When the user toggles an option and confirms
-- Then the JSON file is updated to reflect the new values
+#### Scenario: Default to auto-fit when unset
+- Given the app starts with no settings file present
+- When the first image is selected
+- Then auto-fit occurs because the default for Fit window to image is enabled
 

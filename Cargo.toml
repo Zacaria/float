@@ -8,8 +8,6 @@ authors = ["Always On Top Team"]
 [dependencies]
 # Windowing/event loop for macOS GUI
 winit = "0.28"
-# Native file dialog
-rfd = "0.14"
 
 # macOS Cocoa bindings for menubar and actions
 cocoa = "0.25"

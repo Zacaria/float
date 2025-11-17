@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Always On Top",
+  "version": "0.1.0",
+  "identifier": "com.example.always-on-top",
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "assetProtocol": {
+        "scope": ["/**", "/Users/**"]
+      }
+    },
+    "windows": [
+      {
+        "title": "Always On Top",
+        "label": "main",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": true,
+        "visible": true,
+        "focus": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg", "nsis"],
+    "icon": [],
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

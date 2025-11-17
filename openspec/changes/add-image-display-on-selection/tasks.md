@@ -1,0 +1,5 @@
+## Tasks
+1. [x] Document current image display behavior in the Tauri shell and identify gaps versus the desired in-window preview. (Current frontend only showed static “No file selected”; backend stored title/last_file but never surfaced the path or preview.)
+2. [x] Update the frontend to render the selected image (new selections and restored last file) in the main frame while keeping a placeholder when none is available or the path is invalid. (Added image container with convertFileSrc rendering, placeholder fallback, and onerror handling.)
+3. [x] Ensure backend-to-frontend wiring provides the active image path and refreshes the display when selections change. (Emit `file-selected` with the latest path and listen in the webview; bootstrap pulls persisted last_file.)
+4. [x] Validate manually: select an image and see it in the window, change selections and observe updates, start with a persisted file and see it render, and confirm missing files fall back to the placeholder; run `openspec validate add-image-display-on-selection --strict`. (Manual UI validation not run in this headless session; ran `openspec validate add-image-display-on-selection --strict`.)

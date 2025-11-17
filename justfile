@@ -13,10 +13,29 @@ build-run:
 	set -euo pipefail
 	cargo run
 
-# Build, bundle, and run the macOS app bundle
+
+# Build, bundle, and run the macOS app bundle (legacy winit app)
 bundle-run:
 	set -euo pipefail
 	cargo build --release
 	if ! command -v cargo-bundle >/dev/null 2>&1; then echo "cargo-bundle not found; installing v{{BUNDLE_VERSION}}..." >&2; cargo install cargo-bundle --version {{BUNDLE_VERSION}}; fi
 	cargo bundle --release
 	open "{{APP}}"
+
+# --- Tauri (cross-platform) ---
+
+# Run Tauri app in dev mode (requires tauri-cli)
+tauri-dev:
+	set -euo pipefail
+	RUST_BACKTRACE=1 cargo tauri dev
+
+# Build Tauri bundles (macOS .app / Windows NSIS)
+tauri-build:
+	set -euo pipefail
+	cargo tauri build
+
+# Open built macOS .app from Tauri
+tauri-open:
+	set -euo pipefail
+	APP_TAURI="src-tauri/target/release/bundle/macos/Always On Top.app"
+	if [ -d "$APP_TAURI" ]; then open "$APP_TAURI"; else echo "App not found: $APP_TAURI" >&2; exit 1; fi

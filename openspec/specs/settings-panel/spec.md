@@ -4,10 +4,10 @@
 TBD - created by archiving change add-settings-fit-window-and-aspect-lock. Update Purpose after archive.
 ## Requirements
 ### Requirement: Settings panel
-The Settings panel MUST include a button labeled “Fit Window to Image Now” which triggers an immediate fit-to-image action when pressed. The previous automatic toggle for fit-on-selection is removed.
+The Settings panel MUST include two tabs: a General tab for operational options and a Shortcuts tab that lists the current keyboard shortcuts (read-only).
 
-#### Scenario: Fit Now button
-- Given an image is currently displayed
-- When the user opens Settings and presses “Fit Window to Image Now”
-- Then the window resizes to the image’s dimensions (clamped to the visible screen)
+#### Scenario: Shortcuts tab
+- Given the app is running on macOS
+- When the user opens Settings and selects the Shortcuts tab
+- Then a list shows the active shortcuts (e.g., Cmd+, for Settings, Cmd+O for Open, Cmd+Y for Quick Look)
 

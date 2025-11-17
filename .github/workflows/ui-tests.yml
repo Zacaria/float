@@ -1,0 +1,34 @@
+name: UI Tests (Playwright + tauri-driver)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  ui-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install JS deps
+        run: npm install --no-fund
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Run Playwright tests
+        env:
+          PATH: "$HOME/.cargo/bin:${PATH}"
+        run: npm run test:ui

@@ -4,16 +4,18 @@
 TBD - created by archiving change create-macos-keep-on-top-app. Update Purpose after archive.
 ## Requirements
 ### Requirement: Package as a macOS app bundle
-The project MUST build a signed .app bundle structure suitable for distribution on macOS (signing/notarization may be handled later).
+The project MUST build distributable artifacts for macOS and Windows using the Tauri bundler, producing a macOS app bundle and a Windows NSIS installer.
 
-#### Scenario: Build application bundle
-- Given the Rust toolchain is installed
-- And `cargo-bundle` is installed
-- When the developer runs `cargo bundle --release`
-- Then a macOS `.app` bundle is produced
-- And it appears under `target/release/bundle/osx/Always On Top.app`
+#### Scenario: Build macOS app bundle
+- Given the Rust and Tauri toolchains are installed
+- When the developer runs `tauri build` (or `cargo tauri build`)
+- Then a macOS `.app` is produced under `src-tauri/target/release/bundle/macos/` or equivalent
+
+#### Scenario: Build Windows installer (NSIS)
+- Given the Rust and Tauri toolchains are installed on Windows
+- When the developer runs `tauri build`
+- Then a Windows NSIS installer (`.exe`) is produced under `src-tauri/target/release/bundle/nsis/`
 
 #### Notes
-- Bundle metadata is specified under `Cargo.toml` `[package.metadata.bundle]`.
-- App icon and signing/notarization are tracked as future enhancements.
+- Replace the existing `cargo-bundle` flow; update docs and Justfile.
 
