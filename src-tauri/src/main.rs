@@ -175,9 +175,6 @@ fn spawn_empty_window(app: &AppHandle) -> Result<(), Error> {
             .last_focused_window
             .lock()
             .replace(window.label().to_string());
-        state
-            .window_counter
-            .store(1, std::sync::atomic::Ordering::SeqCst);
     }
     Ok(())
 }
@@ -197,9 +194,6 @@ fn reset_cache(app: &AppHandle) -> Result<(), Error> {
         if let Some(toggle) = state.aspect_toggle.lock().clone() {
             let _ = toggle.set_checked(false);
         }
-        state
-            .window_counter
-            .store(0, std::sync::atomic::Ordering::SeqCst);
     }
     if let Ok(path) = config_path(app) {
         if path.exists() {
@@ -633,18 +627,21 @@ fn pick_and_apply_selection(app: AppHandle, target: SelectionTarget) -> Option<S
 }
 
 fn next_window_label(app: &AppHandle) -> String {
-    if let Some(state) = app.try_state::<AppState>() {
-        let idx = state
-            .window_counter
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-            + 1;
-        if idx == 1 {
-            "main".to_string()
-        } else {
-            format!("window-{idx}")
+    let existing: std::collections::HashSet<String> = app
+        .webview_windows()
+        .keys()
+        .cloned()
+        .collect();
+    if !existing.contains("main") {
+        return "main".to_string();
+    }
+    let mut idx = 1;
+    loop {
+        let candidate = format!("window-{idx}");
+        if !existing.contains(&candidate) {
+            return candidate;
         }
-    } else {
-        "main".to_string()
+        idx += 1;
     }
 }
 
