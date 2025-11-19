@@ -1,8 +1,8 @@
 #![allow(unexpected_cfgs)] // Allow objc macro cfg probes under clippy
 
 use std::fs;
-use std::path::PathBuf;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 

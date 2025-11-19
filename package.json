@@ -2,8 +2,7 @@
   "name": "float-e2e",
   "private": true,
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
-    "tauri-driver": "^2.0.4"
+    "@playwright/test": "^1.50.0"
   },
   "scripts": {
     "test:ui": "playwright test tests/tauri-driver.spec.ts"

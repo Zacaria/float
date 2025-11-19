@@ -34,6 +34,10 @@ tauri-build:
 	set -euo pipefail
 	cargo tauri build
 
+# Cross-build Windows release executable from macOS using cargo-xwin
+tauri-build-windows:
+	set -euo pipefail; TARGET="x86_64-pc-windows-msvc"; if ! rustup target list --installed | grep -q "^${TARGET}$"; then rustup target add "${TARGET}"; fi; if ! command -v cargo-xwin >/dev/null 2>&1; then echo "cargo-xwin not found; installing..." >&2; cargo install cargo-xwin --locked; fi; if [ "$(uname -s)" != "Darwin" ]; then echo "tauri-build-windows is intended to run from macOS hosts" >&2; fi; cargo xwin build --release --target "${TARGET}" --manifest-path src-tauri/Cargo.toml; APP_EXE="src-tauri/target/${TARGET}/release/always-on-top-tauri.exe"; FLOAT_EXE="src-tauri/target/${TARGET}/release/Float.exe"; if [ ! -f "${APP_EXE}" ]; then echo "Expected executable not found at ${APP_EXE}" >&2; exit 1; fi; cp "${APP_EXE}" "${FLOAT_EXE}"; echo "Windows executable ready at ${FLOAT_EXE}"
+
 # Open built macOS .app from Tauri
 tauri-open:
 	set -euo pipefail

@@ -31,6 +31,11 @@ just tauri-dev            # Runs Tauri in dev mode
 ```
 - The window launches always-on-top; use File → Open… to pick an image.
 
+## UI Tests (Playwright)
+- Install Node.js 20+ and run `npm ci` to grab Playwright.
+- Install the Tauri WebDriver once via `cargo install tauri-driver --locked` so the `tauri-driver` binary is on your `PATH` (or export `TAURI_DRIVER_PATH` pointing to it).
+- Execute `npm run test:ui` to run the Playwright spec in `tests/`.
+
 ### Build Bundles (release artifacts)
 ```sh
 just tauri-build          # macOS .app + Windows NSIS installer
@@ -43,6 +48,13 @@ To open the built macOS app locally:
 ```sh
 just tauri-open
 ```
+
+### Cross-build Windows executable (macOS host)
+```sh
+just tauri-build-windows
+```
+- Installs the `x86_64-pc-windows-msvc` Rust target and `cargo-xwin` if missing, then cross-builds the Tauri shell.
+- Outputs a Windows executable at `src-tauri/target/x86_64-pc-windows-msvc/release/Float.exe` for quick sharing/tests (NSIS packaging still requires Windows or CI).
 
 ### Legacy winit app (macOS only)
 ```sh
