@@ -14,9 +14,18 @@ use std::{
 use tauri::menu::{
     CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
 };
-use tauri::{async_runtime, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WindowEvent, Wry};
+use tauri::{
+    async_runtime, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WindowEvent, Wry,
+};
 use tauri_plugin_dialog::DialogExt;
 use tokio::time::sleep;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum WindowSizeUnits {
+    Logical,
+    Physical,
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct PersistedState {
@@ -24,6 +33,7 @@ struct PersistedState {
     aspect_lock: bool,
     window_w: Option<f64>,
     window_h: Option<f64>,
+    window_size_units: Option<WindowSizeUnits>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -54,7 +64,7 @@ enum Error {
 struct AppState {
     settings: Mutex<PersistedState>,
     aspect_ratio: Mutex<HashMap<String, f64>>, // per-window aspect ratio
-    adjusting_resize: Mutex<HashSet<String>>,   // per-window resize guard
+    adjusting_resize: Mutex<HashSet<String>>,  // per-window resize guard
     aspect_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
     pending_save: Mutex<HashMap<String, async_runtime::JoinHandle<()>>>,
     selections: Mutex<HashMap<String, SelectionState>>, // per-window selections
@@ -76,7 +86,11 @@ fn legacy_settings_candidates() -> Vec<PathBuf> {
                 .join(LEGACY_IDENTIFIER)
                 .join("settings.json"),
         );
-        candidates.push(base.config_dir().join(LEGACY_APP_NAME).join("settings.json"));
+        candidates.push(
+            base.config_dir()
+                .join(LEGACY_APP_NAME)
+                .join("settings.json"),
+        );
     }
     candidates
 }
@@ -148,10 +162,26 @@ fn load_state(app: &AppHandle) -> PersistedState {
     PersistedState::default()
 }
 
+fn logical_outer_size(win: &WebviewWindow) -> Option<(f64, f64)> {
+    if let (Ok(size), Ok(scale_factor)) = (win.outer_size(), win.scale_factor()) {
+        let safe_scale = if scale_factor > 0.0 { scale_factor } else { 1.0 };
+        return Some((
+            (size.width as f64) / safe_scale,
+            (size.height as f64) / safe_scale,
+        ));
+    }
+    None
+}
+
 fn save_state(app: &AppHandle, win: &WebviewWindow, mut st: PersistedState) -> Result<(), Error> {
-    if let Ok(size) = win.outer_size() {
+    if let Some((logical_w, logical_h)) = logical_outer_size(win) {
+        st.window_w = Some(logical_w);
+        st.window_h = Some(logical_h);
+        st.window_size_units = Some(WindowSizeUnits::Logical);
+    } else if let Ok(size) = win.outer_size() {
         st.window_w = Some(size.width as f64);
         st.window_h = Some(size.height as f64);
+        st.window_size_units = Some(WindowSizeUnits::Physical);
     }
     let path = config_path(app)?;
     fs::write(path, serde_json::to_vec_pretty(&st)?)?;
@@ -260,10 +290,21 @@ fn active_file_for_window(app: &AppHandle, label: &str) -> Option<String> {
 fn emit_active_file(window: &WebviewWindow, payload: ActiveFilePayload) {
     let _ = window.emit("active-file-changed", payload.clone());
     // Backward compatibility with the previous event name
-    let _ = window.emit("file-selected", ActiveFilePayload { path: payload.path.clone(), index: None, total: None });
+    let _ = window.emit(
+        "file-selected",
+        ActiveFilePayload {
+            path: payload.path.clone(),
+            index: None,
+            total: None,
+        },
+    );
 }
 
-fn apply_active_file(app: &AppHandle, window: &WebviewWindow, selection: &SelectionState) -> Option<String> {
+fn apply_active_file(
+    app: &AppHandle,
+    window: &WebviewWindow,
+    selection: &SelectionState,
+) -> Option<String> {
     let path_str = selection.files.get(selection.active)?.clone();
     if !is_image_path(&path_str) {
         return None;
@@ -310,10 +351,7 @@ fn apply_active_file(app: &AppHandle, window: &WebviewWindow, selection: &Select
 }
 
 fn apply_selection(app: &AppHandle, window: &WebviewWindow, files: Vec<String>) -> Option<String> {
-    let files: Vec<String> = files
-        .into_iter()
-        .filter(|p| is_image_path(p))
-        .collect();
+    let files: Vec<String> = files.into_iter().filter(|p| is_image_path(p)).collect();
     if files.is_empty() {
         emit_active_file(
             window,
@@ -360,10 +398,23 @@ fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last
 
     let st = load_state(app);
     if let (Some(w), Some(h)) = (st.window_w, st.window_h) {
-        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-            width: w,
-            height: h,
-        }));
+        let logical_size = match st.window_size_units.unwrap_or(WindowSizeUnits::Physical) {
+            WindowSizeUnits::Logical => Some((w, h)),
+            WindowSizeUnits::Physical => {
+                if let Ok(scale_factor) = window.scale_factor() {
+                    let safe_scale = if scale_factor > 0.0 { scale_factor } else { 1.0 };
+                    Some((w / safe_scale, h / safe_scale))
+                } else {
+                    None
+                }
+            }
+        };
+        if let Some((logical_w, logical_h)) = logical_size {
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                width: logical_w,
+                height: logical_h,
+            }));
+        }
     }
 
     if load_last_file {
@@ -500,9 +551,10 @@ fn fit_now(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     let aspect = img_w / img_h;
 
     // Anchor on the current larger window dimension and adjust the other down to match aspect.
-    if let Ok(size) = window.outer_size() {
-        let cur_w = size.width as f64;
-        let cur_h = size.height as f64;
+    // Convert to logical units first so high-DPI windows don't double in size when resizing.
+    if let (Ok(size), Ok(scale_factor)) = (window.outer_size(), window.scale_factor()) {
+        let cur_w = (size.width as f64) / scale_factor;
+        let cur_h = (size.height as f64) / scale_factor;
         let min_dim = 50.0_f64;
         let (mut new_w, mut new_h) = if cur_w >= cur_h {
             let mut target_w = cur_w;
@@ -620,8 +672,8 @@ fn pick_files(app: &AppHandle, parent: Option<&WebviewWindow>) -> Vec<String> {
 
 fn pick_and_apply_selection(app: AppHandle, target: SelectionTarget) -> Option<String> {
     // For automation, allow bypassing the native dialog with a predefined path.
-    if let Ok(test_path) = std::env::var("FLOAT_TEST_PATH")
-        .or_else(|_| std::env::var("AOT_TEST_PATH"))
+    if let Ok(test_path) =
+        std::env::var("FLOAT_TEST_PATH").or_else(|_| std::env::var("AOT_TEST_PATH"))
     {
         if !test_path.is_empty() {
             match target {
@@ -659,11 +711,8 @@ fn pick_and_apply_selection(app: AppHandle, target: SelectionTarget) -> Option<S
 }
 
 fn next_window_label(app: &AppHandle) -> String {
-    let existing: std::collections::HashSet<String> = app
-        .webview_windows()
-        .keys()
-        .cloned()
-        .collect();
+    let existing: std::collections::HashSet<String> =
+        app.webview_windows().keys().cloned().collect();
     if !existing.contains("main") {
         return "main".to_string();
     }
@@ -682,18 +731,15 @@ fn spawn_new_window_with_files(app: &AppHandle, files: Vec<String>) -> Option<St
         return None;
     }
     let label = next_window_label(app);
-    let window = tauri::WebviewWindowBuilder::new(
-        app,
-        &label,
-        WebviewUrl::App("index.html".into()),
-    )
-    .title("Float")
-    .visible(true)
-    .resizable(true)
-    .decorations(false)
-    .inner_size(400.0, 400.0)
-    .build()
-    .ok()?;
+    let window =
+        tauri::WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
+            .title("Float")
+            .visible(true)
+            .resizable(true)
+            .decorations(false)
+            .inner_size(400.0, 400.0)
+            .build()
+            .ok()?;
 
     apply_initial_window_state(app, &window, false);
     wire_window_events(app, &window);
@@ -806,7 +852,9 @@ fn main() {
 
             if let Some(state) = app_handle.try_state::<AppState>() {
                 *state.settings.lock() = load_state(&app_handle);
-                state.window_counter.store(1, std::sync::atomic::Ordering::SeqCst);
+                state
+                    .window_counter
+                    .store(1, std::sync::atomic::Ordering::SeqCst);
             }
 
             let win = app_handle

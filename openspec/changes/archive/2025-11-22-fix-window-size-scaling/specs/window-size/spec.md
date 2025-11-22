@@ -1,8 +1,4 @@
-# window-size Specification
-
-## Purpose
-TBD - created by archiving change persist-window-size. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
 ### Requirement: Persist window size
 - The application MUST persist the window size to JSON and restore it on startup.
 - Saving MUST occur after a brief quiet period instead of every resize event to capture the final size while limiting disk writes.
@@ -20,4 +16,3 @@ TBD - created by archiving change persist-window-size. Update Purpose after arch
 - And the window size was saved
 - When the application restarts
 - Then the window opens at the same apparent size on screen (not doubled or halved due to scale factor)
-
