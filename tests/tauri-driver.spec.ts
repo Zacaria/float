@@ -43,6 +43,22 @@ const resolveDriverPath = (): string => {
   );
 };
 
+const launchDriver = (iconPath: string) => {
+  const driverPath = resolveDriverPath();
+  return spawn(driverPath, [], {
+    env: { ...process.env, FLOAT_TEST_PATH: iconPath },
+    stdio: 'inherit',
+  });
+};
+
+const getSettings = (page: import('@playwright/test').Page) =>
+  page.evaluate(async () => {
+    const tauri = (window as any).__TAURI__ || {};
+    if (tauri?.core?.invoke) return tauri.core.invoke('get_settings');
+    if (tauri.invoke) return tauri.invoke('get_settings');
+    return null;
+  });
+
 /**
  * Boot the Tauri app via tauri-driver and connect Playwright to it.
  * The driver listens on 5544 by default; we wait for readiness before connecting.
@@ -53,11 +69,7 @@ test('opens app and shows toolbar', async ({ page }) => {
     throw new Error(`icon not found at ${iconPath}`);
   }
 
-  const driverPath = resolveDriverPath();
-  const driver = spawn(driverPath, [], {
-    env: { ...process.env, FLOAT_TEST_PATH: iconPath },
-    stdio: 'inherit',
-  });
+  const driver = launchDriver(iconPath);
 
   // Give the driver time to start
   await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -66,6 +78,42 @@ test('opens app and shows toolbar', async ({ page }) => {
 
   await expect(page).toHaveTitle('Float');
   await page.waitForSelector('text=No file selected');
+
+  driver.kill();
+});
+
+test('toggles click-through with shortcut', async ({ page }) => {
+  const iconPath = path.resolve(__dirname, '..', 'src-tauri', 'icons', 'icon.png');
+  if (!fs.existsSync(iconPath)) {
+    throw new Error(`icon not found at ${iconPath}`);
+  }
+
+  const driver = launchDriver(iconPath);
+
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  await page.goto('http://localhost:5544/');
+  await expect(page).toHaveTitle('Float');
+  await page.waitForSelector('text=No file selected');
+
+  await page.click('body');
+
+  const shortcut = process.platform === 'darwin' ? 'Meta+Shift+C' : 'Control+Shift+C';
+
+  let settings = (await getSettings(page)) as any;
+  expect(settings?.click_through).toBeFalsy();
+
+  await page.keyboard.press(shortcut);
+  await page.waitForTimeout(200);
+
+  settings = (await getSettings(page)) as any;
+  expect(settings?.click_through).toBe(true);
+
+  await page.keyboard.press(shortcut);
+  await page.waitForTimeout(200);
+
+  settings = (await getSettings(page)) as any;
+  expect(settings?.click_through).toBe(false);
 
   driver.kill();
 });

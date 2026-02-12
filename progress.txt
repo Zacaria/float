@@ -1,0 +1,8 @@
+## Codebase Patterns
+- Native menu toggles are stored in AppState as CheckMenuItem handles; update the checkmark alongside persisted settings updates.
+- PersistedState changes should be applied to new windows in apply_initial_window_state and saved via save_state after user actions.
+
+## Progress Log
+- story-1: Added click-through menu toggle + shortcut with persistence, applied per-window at startup, and added Playwright coverage for the shortcut toggle.
+- story-1: Re-ran checks; cargo check fails on lockfile v4 with cargo 1.75, cargo tauri CLI missing, Playwright browsers not installed.
+- story-1: Verified click-through implementation remains intact; cargo check fails due to Cargo.lock v4 requiring -Znext-lockfile-bump, cargo tauri build --ci fails (cargo-tauri CLI missing), Playwright tests fail until `npx playwright install`.

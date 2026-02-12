@@ -28,9 +28,11 @@ enum WindowSizeUnits {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 struct PersistedState {
     last_file: Option<String>,
     aspect_lock: bool,
+    click_through: bool,
     window_w: Option<f64>,
     window_h: Option<f64>,
     window_size_units: Option<WindowSizeUnits>,
@@ -66,6 +68,7 @@ struct AppState {
     aspect_ratio: Mutex<HashMap<String, f64>>, // per-window aspect ratio
     adjusting_resize: Mutex<HashSet<String>>,  // per-window resize guard
     aspect_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
+    click_through_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
     pending_save: Mutex<HashMap<String, async_runtime::JoinHandle<()>>>,
     selections: Mutex<HashMap<String, SelectionState>>, // per-window selections
     last_focused_window: Mutex<Option<String>>,         // label of last focused window
@@ -121,6 +124,7 @@ impl Default for AppState {
             aspect_ratio: Mutex::new(HashMap::new()),
             adjusting_resize: Mutex::new(HashSet::new()),
             aspect_toggle: Mutex::new(None),
+            click_through_toggle: Mutex::new(None),
             pending_save: Mutex::new(HashMap::new()),
             selections: Mutex::new(HashMap::new()),
             last_focused_window: Mutex::new(None),
@@ -188,6 +192,26 @@ fn save_state(app: &AppHandle, win: &WebviewWindow, mut st: PersistedState) -> R
     Ok(())
 }
 
+fn apply_click_through_setting(window: &WebviewWindow, enabled: bool) {
+    let _ = window.set_ignore_cursor_events(enabled);
+    let _ = window.set_always_on_top(true);
+}
+
+fn update_click_through_state(
+    app: &AppHandle,
+    window: &WebviewWindow,
+    st: &mut PersistedState,
+    enabled: bool,
+) {
+    st.click_through = enabled;
+    apply_click_through_setting(window, enabled);
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Some(toggle) = state.click_through_toggle.lock().clone() {
+            let _ = toggle.set_checked(enabled);
+        }
+    }
+}
+
 fn schedule_size_save(app: AppHandle, label: String, win: WebviewWindow) {
     if let Some(state) = app.try_state::<AppState>() {
         let mut pending = state.pending_save.lock();
@@ -251,6 +275,9 @@ fn reset_cache(app: &AppHandle) -> Result<(), Error> {
         state.last_focused_window.lock().take();
         // Sync menu toggle to defaults
         if let Some(toggle) = state.aspect_toggle.lock().clone() {
+            let _ = toggle.set_checked(false);
+        }
+        if let Some(toggle) = state.click_through_toggle.lock().clone() {
             let _ = toggle.set_checked(false);
         }
     }
@@ -397,6 +424,7 @@ fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last
     let _ = window.set_always_on_top(true);
 
     let st = load_state(app);
+    apply_click_through_setting(window, st.click_through);
     if let (Some(w), Some(h)) = (st.window_w, st.window_h) {
         let logical_size = match st.window_size_units.unwrap_or(WindowSizeUnits::Physical) {
             WindowSizeUnits::Logical => Some((w, h)),
@@ -605,6 +633,7 @@ fn get_settings(app: AppHandle) -> PersistedState {
 #[derive(Deserialize)]
 struct SettingsUpdate {
     aspect_lock: Option<bool>,
+    click_through: Option<bool>,
 }
 
 #[tauri::command]
@@ -622,6 +651,9 @@ fn set_settings(app: AppHandle, update: SettingsUpdate) -> Result<PersistedState
                 let _ = toggle.set_checked(v);
             }
         }
+    }
+    if let Some(v) = update.click_through {
+        update_click_through_state(&app, &win, &mut st, v);
     }
     save_state(&app, &win, st.clone()).map_err(|e| e.to_string())?;
     if let Some(state) = app.try_state::<AppState>() {
@@ -758,6 +790,7 @@ fn main() {
         .manage(AppState::default())
         .setup(|app| {
             let app_handle = app.handle().clone();
+            let initial_state = load_state(&app_handle);
 
             // Build native menu with platform shortcuts and toggles.
             let file_menu = SubmenuBuilder::new(&app_handle, "File")
@@ -808,9 +841,18 @@ fn main() {
                 )
                 .build()?;
 
+            let click_through_toggle =
+                CheckMenuItemBuilder::with_id("click_through_toggle", "Click-Through")
+                    .checked(initial_state.click_through)
+                    .accelerator(if cfg!(target_os = "macos") {
+                        "Cmd+Shift+C"
+                    } else {
+                        "Ctrl+Shift+C"
+                    })
+                    .build(&app_handle)?;
             let aspect_toggle =
                 CheckMenuItemBuilder::with_id("aspect_lock_toggle", "Lock aspect ratio on resize")
-                    .checked(load_state(&app_handle).aspect_lock)
+                    .checked(initial_state.aspect_lock)
                     .build(&app_handle)?;
             let view_menu = SubmenuBuilder::new(&app_handle, "View")
                 .item(
@@ -840,6 +882,7 @@ fn main() {
                         })
                         .build(&app_handle)?,
                 )
+                .item(&click_through_toggle)
                 .item(&aspect_toggle);
             let app_menu = MenuBuilder::new(&app_handle)
                 .item(&file_menu)
@@ -848,10 +891,11 @@ fn main() {
             app.set_menu(app_menu)?;
             if let Some(state) = app_handle.try_state::<AppState>() {
                 *state.aspect_toggle.lock() = Some(aspect_toggle.clone());
+                *state.click_through_toggle.lock() = Some(click_through_toggle.clone());
             }
 
             if let Some(state) = app_handle.try_state::<AppState>() {
-                *state.settings.lock() = load_state(&app_handle);
+                *state.settings.lock() = initial_state.clone();
                 state
                     .window_counter
                     .store(1, std::sync::atomic::Ordering::SeqCst);
@@ -916,6 +960,21 @@ fn main() {
             "next_file" => {
                 if let Some(win) = focused_window(app) {
                     let _ = navigate_selection(app, &win, 1);
+                }
+            }
+            "click_through_toggle" => {
+                if let Some(win) = focused_window(app) {
+                    let mut s = if let Some(state) = app.try_state::<AppState>() {
+                        state.settings.lock().clone()
+                    } else {
+                        load_state(app)
+                    };
+                    let next_state = !s.click_through;
+                    update_click_through_state(app, &win, &mut s, next_state);
+                    let _ = save_state(app, &win, s.clone());
+                    if let Some(state) = app.try_state::<AppState>() {
+                        *state.settings.lock() = s;
+                    }
                 }
             }
             "aspect_lock_toggle" => {
