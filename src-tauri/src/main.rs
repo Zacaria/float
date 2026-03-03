@@ -27,13 +27,32 @@ enum WindowSizeUnits {
     Physical,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 struct PersistedState {
     last_file: Option<String>,
     aspect_lock: bool,
+    click_through: bool,
+    slideshow_enabled: bool,
+    slideshow_interval_ms: u64,
     window_w: Option<f64>,
     window_h: Option<f64>,
     window_size_units: Option<WindowSizeUnits>,
+}
+
+impl Default for PersistedState {
+    fn default() -> Self {
+        Self {
+            last_file: None,
+            aspect_lock: false,
+            click_through: false,
+            slideshow_enabled: false,
+            slideshow_interval_ms: 5000,
+            window_w: None,
+            window_h: None,
+            window_size_units: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -66,6 +85,8 @@ struct AppState {
     aspect_ratio: Mutex<HashMap<String, f64>>, // per-window aspect ratio
     adjusting_resize: Mutex<HashSet<String>>,  // per-window resize guard
     aspect_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
+    click_through_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
+    slideshow_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
     pending_save: Mutex<HashMap<String, async_runtime::JoinHandle<()>>>,
     selections: Mutex<HashMap<String, SelectionState>>, // per-window selections
     last_focused_window: Mutex<Option<String>>,         // label of last focused window
@@ -121,6 +142,8 @@ impl Default for AppState {
             aspect_ratio: Mutex::new(HashMap::new()),
             adjusting_resize: Mutex::new(HashSet::new()),
             aspect_toggle: Mutex::new(None),
+            click_through_toggle: Mutex::new(None),
+            slideshow_toggle: Mutex::new(None),
             pending_save: Mutex::new(HashMap::new()),
             selections: Mutex::new(HashMap::new()),
             last_focused_window: Mutex::new(None),
@@ -249,8 +272,14 @@ fn reset_cache(app: &AppHandle) -> Result<(), Error> {
         state.adjusting_resize.lock().clear();
         state.selections.lock().clear();
         state.last_focused_window.lock().take();
-        // Sync menu toggle to defaults
+        // Sync menu toggles to defaults
         if let Some(toggle) = state.aspect_toggle.lock().clone() {
+            let _ = toggle.set_checked(false);
+        }
+        if let Some(toggle) = state.click_through_toggle.lock().clone() {
+            let _ = toggle.set_checked(false);
+        }
+        if let Some(toggle) = state.slideshow_toggle.lock().clone() {
             let _ = toggle.set_checked(false);
         }
     }
@@ -393,6 +422,17 @@ fn navigate_selection(app: &AppHandle, window: &WebviewWindow, delta: isize) -> 
     None
 }
 
+fn apply_click_through_to_window(window: &WebviewWindow, enabled: bool) {
+    #[allow(deprecated)]
+    let _ = window.set_ignore_cursor_events(enabled);
+}
+
+fn apply_click_through_to_all_windows(app: &AppHandle, enabled: bool) {
+    for (_, win) in app.webview_windows() {
+        apply_click_through_to_window(&win, enabled);
+    }
+}
+
 fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last_file: bool) {
     let _ = window.set_always_on_top(true);
 
@@ -416,6 +456,8 @@ fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last
             }));
         }
     }
+
+    apply_click_through_to_window(window, st.click_through);
 
     if load_last_file {
         if let Some(p) = st.last_file.clone() {
@@ -605,6 +647,9 @@ fn get_settings(app: AppHandle) -> PersistedState {
 #[derive(Deserialize)]
 struct SettingsUpdate {
     aspect_lock: Option<bool>,
+    click_through: Option<bool>,
+    slideshow_enabled: Option<bool>,
+    slideshow_interval_ms: Option<u64>,
 }
 
 #[tauri::command]
@@ -622,6 +667,26 @@ fn set_settings(app: AppHandle, update: SettingsUpdate) -> Result<PersistedState
                 let _ = toggle.set_checked(v);
             }
         }
+    }
+    if let Some(v) = update.click_through {
+        st.click_through = v;
+        apply_click_through_to_all_windows(&app, v);
+        if let Some(state) = app.try_state::<AppState>() {
+            if let Some(toggle) = state.click_through_toggle.lock().clone() {
+                let _ = toggle.set_checked(v);
+            }
+        }
+    }
+    if let Some(v) = update.slideshow_enabled {
+        st.slideshow_enabled = v;
+        if let Some(state) = app.try_state::<AppState>() {
+            if let Some(toggle) = state.slideshow_toggle.lock().clone() {
+                let _ = toggle.set_checked(v);
+            }
+        }
+    }
+    if let Some(v) = update.slideshow_interval_ms {
+        st.slideshow_interval_ms = v.clamp(1000, 60000);
     }
     save_state(&app, &win, st.clone()).map_err(|e| e.to_string())?;
     if let Some(state) = app.try_state::<AppState>() {
@@ -808,9 +873,28 @@ fn main() {
                 )
                 .build()?;
 
+            let initial_settings = load_state(&app_handle);
             let aspect_toggle =
                 CheckMenuItemBuilder::with_id("aspect_lock_toggle", "Lock aspect ratio on resize")
-                    .checked(load_state(&app_handle).aspect_lock)
+                    .checked(initial_settings.aspect_lock)
+                    .build(&app_handle)?;
+            let click_through_toggle =
+                CheckMenuItemBuilder::with_id("click_through_toggle", "Click-through overlay")
+                    .checked(initial_settings.click_through)
+                    .accelerator(if cfg!(target_os = "macos") {
+                        "Cmd+Shift+X"
+                    } else {
+                        "Ctrl+Shift+X"
+                    })
+                    .build(&app_handle)?;
+            let slideshow_toggle =
+                CheckMenuItemBuilder::with_id("slideshow_toggle", "Slideshow mode")
+                    .checked(initial_settings.slideshow_enabled)
+                    .accelerator(if cfg!(target_os = "macos") {
+                        "Cmd+Shift+S"
+                    } else {
+                        "Ctrl+Shift+S"
+                    })
                     .build(&app_handle)?;
             let view_menu = SubmenuBuilder::new(&app_handle, "View")
                 .item(
@@ -840,7 +924,9 @@ fn main() {
                         })
                         .build(&app_handle)?,
                 )
-                .item(&aspect_toggle);
+                .item(&aspect_toggle)
+                .item(&click_through_toggle)
+                .item(&slideshow_toggle);
             let app_menu = MenuBuilder::new(&app_handle)
                 .item(&file_menu)
                 .item(&view_menu.build()?)
@@ -848,6 +934,8 @@ fn main() {
             app.set_menu(app_menu)?;
             if let Some(state) = app_handle.try_state::<AppState>() {
                 *state.aspect_toggle.lock() = Some(aspect_toggle.clone());
+                *state.click_through_toggle.lock() = Some(click_through_toggle.clone());
+                *state.slideshow_toggle.lock() = Some(slideshow_toggle.clone());
             }
 
             if let Some(state) = app_handle.try_state::<AppState>() {
@@ -933,6 +1021,49 @@ fn main() {
                         !s.aspect_lock
                     };
                     s.aspect_lock = new_state;
+                    if let Some(win) = focused_window(app) {
+                        let _ = save_state(app, &win, s.clone());
+                    }
+                    *state.settings.lock() = s;
+                }
+            }
+            "click_through_toggle" => {
+                if let Some(state) = app.try_state::<AppState>() {
+                    let mut s = state.settings.lock().clone();
+                    let new_state = if let Some(toggle) = state.click_through_toggle.lock().clone() {
+                        if let Ok(current) = toggle.is_checked() {
+                            let desired = !current;
+                            let _ = toggle.set_checked(desired);
+                            desired
+                        } else {
+                            !s.click_through
+                        }
+                    } else {
+                        !s.click_through
+                    };
+                    s.click_through = new_state;
+                    apply_click_through_to_all_windows(app, new_state);
+                    if let Some(win) = focused_window(app) {
+                        let _ = save_state(app, &win, s.clone());
+                    }
+                    *state.settings.lock() = s;
+                }
+            }
+            "slideshow_toggle" => {
+                if let Some(state) = app.try_state::<AppState>() {
+                    let mut s = state.settings.lock().clone();
+                    let new_state = if let Some(toggle) = state.slideshow_toggle.lock().clone() {
+                        if let Ok(current) = toggle.is_checked() {
+                            let desired = !current;
+                            let _ = toggle.set_checked(desired);
+                            desired
+                        } else {
+                            !s.slideshow_enabled
+                        }
+                    } else {
+                        !s.slideshow_enabled
+                    };
+                    s.slideshow_enabled = new_state;
                     if let Some(win) = focused_window(app) {
                         let _ = save_state(app, &win, s.clone());
                     }

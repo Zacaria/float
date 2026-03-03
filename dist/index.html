@@ -41,6 +41,13 @@
       <div class="controls no-drag">
         <button id="prevBtn" class="btn no-drag" type="button">Previous</button>
         <button id="nextBtn" class="btn no-drag" type="button">Next</button>
+        <button id="slideshowBtn" class="btn no-drag" type="button">Slideshow: Off</button>
+        <select id="slideshowInterval" class="btn no-drag" aria-label="Slideshow interval">
+          <option value="2000">2s</option>
+          <option value="5000" selected>5s</option>
+          <option value="10000">10s</option>
+          <option value="15000">15s</option>
+        </select>
       </div>
     </div>
     <script>
@@ -58,7 +65,16 @@
       const statusEl = document.getElementById('status');
       const prevBtn = document.getElementById('prevBtn');
       const nextBtn = document.getElementById('nextBtn');
+      const slideshowBtn = document.getElementById('slideshowBtn');
+      const slideshowIntervalEl = document.getElementById('slideshowInterval');
       const appEl = document.getElementById('app');
+
+      const slideshowState = {
+        enabled: false,
+        intervalMs: 5000,
+        total: 0,
+      };
+      let slideshowTimer = null;
 
       const defaultPlaceholder = () => {
         const platform =
@@ -78,6 +94,42 @@
         statusEl.textContent = '';
         prevBtn.disabled = true;
         nextBtn.disabled = true;
+        slideshowState.total = 0;
+        syncSlideshowUi();
+        stopSlideshow();
+      };
+
+      const stopSlideshow = () => {
+        if (slideshowTimer) {
+          clearInterval(slideshowTimer);
+          slideshowTimer = null;
+        }
+      };
+
+      const syncSlideshowUi = () => {
+        if (!slideshowBtn || !slideshowIntervalEl) return;
+        slideshowBtn.textContent = `Slideshow: ${slideshowState.enabled ? 'On' : 'Off'}`;
+        slideshowIntervalEl.value = String(slideshowState.intervalMs);
+        const disabled = slideshowState.total <= 1;
+        slideshowBtn.disabled = disabled;
+        slideshowIntervalEl.disabled = disabled;
+      };
+
+      const startSlideshowIfNeeded = () => {
+        stopSlideshow();
+        if (!slideshowState.enabled || slideshowState.total <= 1) return;
+        const interval = Number(slideshowState.intervalMs) || 5000;
+        slideshowTimer = setInterval(() => {
+          invoke('next_file');
+        }, interval);
+      };
+
+      const persistSettings = async (update) => {
+        try {
+          await invoke('set_settings', { update });
+        } catch (err) {
+          console.warn('Failed to persist settings', err);
+        }
       };
 
       const buildSources = (path) => {
@@ -141,8 +193,8 @@
         const index = payload?.index ?? null;
         const total = payload?.total ?? null;
         if (!path) {
-            showPlaceholder();
-            return;
+          showPlaceholder();
+          return;
         }
         const fileName = path.split(/[\\/]/).pop() || path;
         fileInfoEl.textContent = fileName;
@@ -150,11 +202,15 @@
           statusEl.textContent = `File ${index + 1} of ${total}`;
           prevBtn.disabled = index <= 0;
           nextBtn.disabled = index >= total - 1;
+          slideshowState.total = total;
         } else {
           statusEl.textContent = '';
           prevBtn.disabled = false;
           nextBtn.disabled = false;
+          slideshowState.total = 0;
         }
+        syncSlideshowUi();
+        startSlideshowIfNeeded();
         showImage(path);
       };
 
@@ -179,6 +235,13 @@
       const bootstrap = async () => {
         try {
           const settings = await invoke('get_settings');
+          if (typeof settings?.slideshow_enabled === 'boolean') {
+            slideshowState.enabled = settings.slideshow_enabled;
+          }
+          if (typeof settings?.slideshow_interval_ms === 'number') {
+            slideshowState.intervalMs = settings.slideshow_interval_ms;
+          }
+          syncSlideshowUi();
           if (settings?.last_file) {
             renderState({ path: settings.last_file });
             return;
@@ -222,6 +285,22 @@
       nextBtn.addEventListener('click', () => {
         showChrome();
         invoke('next_file');
+      });
+      slideshowBtn?.addEventListener('click', async () => {
+        showChrome();
+        slideshowState.enabled = !slideshowState.enabled;
+        syncSlideshowUi();
+        startSlideshowIfNeeded();
+        await persistSettings({ slideshow_enabled: slideshowState.enabled });
+      });
+      slideshowIntervalEl?.addEventListener('change', async () => {
+        showChrome();
+        const next = Number(slideshowIntervalEl.value);
+        if (!Number.isFinite(next) || next < 1000) return;
+        slideshowState.intervalMs = next;
+        syncSlideshowUi();
+        startSlideshowIfNeeded();
+        await persistSettings({ slideshow_interval_ms: next });
       });
     </script>
   </body>
