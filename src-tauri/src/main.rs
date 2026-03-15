@@ -1,7 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use base64::{engine::general_purpose, Engine};
-use directories::{BaseDirs, ProjectDirs};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -93,29 +92,6 @@ struct AppState {
     window_counter: AtomicUsize,
 }
 
-const LEGACY_APP_NAME: &str = "Always On Top";
-const LEGACY_IDENTIFIER: &str = "com.example.always-on-top";
-
-fn legacy_settings_candidates() -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(proj) = ProjectDirs::from("com", "example", LEGACY_APP_NAME) {
-        candidates.push(proj.config_dir().to_path_buf().join("settings.json"));
-    }
-    if let Some(base) = BaseDirs::new() {
-        candidates.push(
-            base.config_dir()
-                .join(LEGACY_IDENTIFIER)
-                .join("settings.json"),
-        );
-        candidates.push(
-            base.config_dir()
-                .join(LEGACY_APP_NAME)
-                .join("settings.json"),
-        );
-    }
-    candidates
-}
-
 fn is_image_path(path: &str) -> bool {
     let ext = PathBuf::from(path)
         .extension()
@@ -160,16 +136,7 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, Error> {
     if !dir.exists() {
         fs::create_dir_all(&dir)?;
     }
-    let dest = dir.join("settings.json");
-    if !dest.exists() {
-        for candidate in legacy_settings_candidates() {
-            if candidate.exists() {
-                let _ = fs::copy(&candidate, &dest);
-                break;
-            }
-        }
-    }
-    Ok(dest)
+    Ok(dir.join("settings.json"))
 }
 
 fn load_state(app: &AppHandle) -> PersistedState {
@@ -1011,9 +978,7 @@ fn main() {
                     let mut s = state.settings.lock().clone();
                     let new_state = if let Some(toggle) = state.aspect_toggle.lock().clone() {
                         if let Ok(current) = toggle.is_checked() {
-                            let desired = !current;
-                            let _ = toggle.set_checked(desired);
-                            desired
+                            current
                         } else {
                             !s.aspect_lock
                         }
@@ -1032,9 +997,7 @@ fn main() {
                     let mut s = state.settings.lock().clone();
                     let new_state = if let Some(toggle) = state.click_through_toggle.lock().clone() {
                         if let Ok(current) = toggle.is_checked() {
-                            let desired = !current;
-                            let _ = toggle.set_checked(desired);
-                            desired
+                            current
                         } else {
                             !s.click_through
                         }
@@ -1054,9 +1017,7 @@ fn main() {
                     let mut s = state.settings.lock().clone();
                     let new_state = if let Some(toggle) = state.slideshow_toggle.lock().clone() {
                         if let Ok(current) = toggle.is_checked() {
-                            let desired = !current;
-                            let _ = toggle.set_checked(desired);
-                            desired
+                            current
                         } else {
                             !s.slideshow_enabled
                         }

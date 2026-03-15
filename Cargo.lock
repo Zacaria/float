@@ -25,19 +25,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "always-on-top"
-version = "0.1.0"
-dependencies = [
- "cocoa",
- "directories",
- "objc",
- "once_cell",
- "serde",
- "serde_json",
- "winit",
-]
-
-[[package]]
 name = "android-activity"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -329,6 +316,19 @@ checksum = "bfe33edd8e85a12a67454e37f8c75e730830d83e313556ab9ebf9ee7fbeb3bfb"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+]
+
+[[package]]
+name = "float"
+version = "0.1.0"
+dependencies = [
+ "cocoa",
+ "directories",
+ "objc",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "winit",
 ]
 
 [[package]]

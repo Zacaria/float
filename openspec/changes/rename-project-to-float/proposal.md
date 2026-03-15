@@ -10,7 +10,7 @@ rename-project-to-float
 ## What Changes
 - Rebrand the application to "Float" across UI strings (window titles, menus, dialogs) and native metadata.
 - Update bundler config and outputs (app bundle/installer names, product metadata) plus documentation and release instructions to use the Float name and paths.
-- Adjust identifiers and persisted paths as needed to align with the new name while preserving existing user data.
+- Adjust identifiers and persisted paths to align with the new name before first release.
 
 ## Scope
 - Naming/branding changes only; functionality remains the same.
@@ -20,4 +20,4 @@ rename-project-to-float
 - Platform support changes.
 
 ## Open Questions
-- Resolved: use the `com.havesomecode` namespace for identifiers/settings; migrate prior data into the Float-branded path.
+- Resolved: use the `com.havesomecode` namespace for identifiers/settings; no migration is needed before first release.

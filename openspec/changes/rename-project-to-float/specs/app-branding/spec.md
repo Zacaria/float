@@ -20,7 +20,7 @@ The application MUST present the product name as "Float" across UI, metadata, bu
 - When they follow build/run instructions or view app details
 - Then the product name referenced is "Float" with updated paths/output names, and no "Always On Top" strings remain
 
-#### Scenario: Settings namespace aligns with Float without data loss
-- Given existing users have persisted settings under the previous app name
-- When launching the renamed app
-- Then persisted settings continue working under a Float-branded identifier, migrating prior data if the identifier changed
+#### Scenario: Settings namespace uses Float branding
+- Given the app stores settings on disk
+- When inspecting the settings namespace or config path
+- Then it uses the Float-branded identifier and does not reference legacy app names

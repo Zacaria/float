@@ -33,23 +33,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "always-on-top-tauri"
-version = "0.1.0"
-dependencies = [
- "base64 0.21.7",
- "directories",
- "image",
- "parking_lot",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -892,6 +875,23 @@ checksum = "bfe33edd8e85a12a67454e37f8c75e730830d83e313556ab9ebf9ee7fbeb3bfb"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+]
+
+[[package]]
+name = "float-tauri"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.7",
+ "directories",
+ "image",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]

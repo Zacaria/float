@@ -1,5 +1,5 @@
 [package]
-name = "always-on-top"
+name = "float"
 version = "0.1.0"
 edition = "2021"
 description = "Float - minimal utility to keep a window always on top."

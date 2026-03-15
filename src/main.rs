@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 
-use directories::{BaseDirs, ProjectDirs};
+use directories::ProjectDirs;
 use winit::dpi::LogicalSize;
 use winit::event::{
     ElementState, Event, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent,
@@ -55,28 +55,6 @@ struct PersistedState {
 
 const APP_NAME: &str = "Float";
 const APP_ORG: &str = "havesomecode";
-const LEGACY_APP_NAME: &str = "Always On Top";
-const LEGACY_IDENTIFIER: &str = "com.example.always-on-top";
-
-fn legacy_config_candidates() -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(proj) = ProjectDirs::from("com", "example", LEGACY_APP_NAME) {
-        candidates.push(proj.config_dir().join("settings.json"));
-    }
-    if let Some(base) = BaseDirs::new() {
-        candidates.push(
-            base.config_dir()
-                .join(LEGACY_IDENTIFIER)
-                .join("settings.json"),
-        );
-        candidates.push(
-            base.config_dir()
-                .join(LEGACY_APP_NAME)
-                .join("settings.json"),
-        );
-    }
-    candidates
-}
 
 fn config_path() -> Option<std::path::PathBuf> {
     let proj = ProjectDirs::from("com", APP_ORG, APP_NAME)?;
@@ -86,22 +64,6 @@ fn config_path() -> Option<std::path::PathBuf> {
         return None;
     }
     p.push("settings.json");
-    if !p.exists() {
-        for candidate in legacy_config_candidates() {
-            if candidate.exists() {
-                if let Some(dir) = p.parent() {
-                    let _ = fs::create_dir_all(dir);
-                }
-                if let Err(err) = fs::copy(&candidate, &p) {
-                    eprintln!(
-                        "failed to migrate legacy settings from {}: {err}",
-                        candidate.display()
-                    );
-                }
-                break;
-            }
-        }
-    }
     Some(p)
 }
 

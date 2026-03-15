@@ -1,5 +1,5 @@
 [package]
-name = "always-on-top-tauri"
+name = "float-tauri"
 version = "0.1.0"
 description = "Float - Tauri shell"
 authors = ["Float Team"]
