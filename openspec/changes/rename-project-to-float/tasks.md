@@ -2,7 +2,7 @@
 - [x] 1.1 Inventory all "Always On Top" references across code, config, docs, bundle outputs, and persisted paths.
 - [x] 1.2 Update UI strings (window titles, menu labels, dialogs) to show "Float" everywhere.
 - [x] 1.3 Update bundler metadata/productName and bundle output names to use "Float" on macOS and Windows.
-- [x] 1.4 Decide and apply the Float bundle identifier/settings namespace; migrate or alias existing persisted settings if the namespace changes.
+- [x] 1.4 Decide and apply the Float bundle identifier/settings namespace.
 
 ## 2. Documentation
 - [x] 2.1 Refresh README/release notes and any package metadata to use the Float name and updated bundle paths/installers.
