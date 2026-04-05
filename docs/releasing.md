@@ -17,7 +17,7 @@ The `release-bundles` workflow expects these repository secrets:
 - `APPLE_PASSWORD`: app-specific password for the Apple account.
 - `APPLE_TEAM_ID`: Apple Developer team identifier.
 
-The workflow imports the certificate, resolves the `Developer ID Application` signing identity, builds a universal Tauri bundle, staples the app and DMG, validates notarization, and publishes only the stable macOS assets to GitHub Releases.
+The workflow imports the certificate, resolves the `Developer ID Application` signing identity, builds a universal Tauri bundle, explicitly notarizes the generated DMG, staples the app and DMG, validates notarization, and publishes only the stable macOS assets to GitHub Releases.
 
 ## GitHub Pages landing page
 
@@ -52,7 +52,7 @@ APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/Float.app
 DMG_PATH="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -n 1)"
 ```
 
-4. Submit the DMG for notarization if it was not handled during build:
+4. Submit the DMG for notarization:
 
 ```sh
 xcrun notarytool submit "$DMG_PATH" \
