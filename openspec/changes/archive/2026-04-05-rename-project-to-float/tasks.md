@@ -10,4 +10,4 @@
 
 ## 3. Validation
 - [x] 3.1 `openspec validate rename-project-to-float --strict`.
-- [ ] 3.2 Manual build check: run `just tauri-build` (or `tauri build`) and confirm bundle/installer names and app UI show "Float".
+- [x] 3.2 Manual build check: run `just tauri-build` (or `tauri build`) and confirm bundle/installer names and app UI show "Float".
