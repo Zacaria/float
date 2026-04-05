@@ -128,8 +128,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  build-windows-preview:
-    name: Build Windows preview artifact
+  build-windows-public:
+    name: Build Windows release artifact
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -153,24 +153,26 @@ jobs:
       - name: Build Windows NSIS installer
         run: cargo tauri build --ci --bundles nsis
 
-      - name: Collect Windows preview artifact
+      - name: Create stable Windows release artifact
         shell: pwsh
         run: |
           $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
           if (-not $installer) { Write-Error "Installer not found"; exit 1 }
-          Copy-Item $installer.FullName "Float-windows-preview.exe" -Force
+          Copy-Item $installer.FullName "Float-windows-x64-setup.exe" -Force
 
-      - name: Upload Windows preview artifact
+      - name: Upload Windows release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: float-windows-preview
-          path: Float-windows-preview.exe
+          name: float-windows-public
+          path: Float-windows-x64-setup.exe
           if-no-files-found: error
           retention-days: 14
 
   release:
     name: Publish public release assets
-    needs: build-macos-public
+    needs:
+      - build-macos-public
+      - build-windows-public
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
@@ -180,10 +182,17 @@ jobs:
           name: float-macos-public
           path: release-artifacts
 
+      - name: Download Windows release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: float-windows-public
+          path: release-artifacts
+
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release-artifacts/Float-macos-universal.dmg
             release-artifacts/Float-macos-universal.sha256
+            release-artifacts/Float-windows-x64-setup.exe
           generate_release_notes: true

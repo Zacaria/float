@@ -66,22 +66,25 @@ just bundle-run           # cargo bundle --release (macOS .app)
 The public distribution channel is:
 
 - GitHub Pages for the landing page
-- GitHub Releases for the notarized macOS download
+- GitHub Releases for the public downloadable assets
 
-Public macOS assets are published with stable names:
+Public release assets are published with stable names:
 
 - `Float-macos-universal.dmg`
 - `Float-macos-universal.sha256`
+- `Float-windows-x64-setup.exe`
 
 The landing page lives in `site/` and links to:
 
 - `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg`
 - `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256`
 
+The landing page remains macOS-only for now. Windows users should download the installer directly from the GitHub Release page.
+
 ### CI release flow
 
 1. `release-plz` updates `CHANGELOG.md`, versions, tags, and the GitHub Release from `.github/workflows/release-plz.yml`.
-2. `.github/workflows/release-bundles.yml` builds a universal macOS bundle on `v*` tags, signs it with a `Developer ID Application` certificate, staples and validates the notarized app and DMG, generates `Float-macos-universal.sha256`, and publishes the macOS assets to the GitHub Release.
+2. `.github/workflows/release-bundles.yml` builds a universal macOS bundle on `v*` tags, signs it with a `Developer ID Application` certificate, staples and validates the notarized app and DMG, generates `Float-macos-universal.sha256`, builds the Windows NSIS installer, and publishes all three public assets to the GitHub Release.
 3. `.github/workflows/pages.yml` deploys the static landing page from `site/` to GitHub Pages on `master`.
 
 ### CI secret contract

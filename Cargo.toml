@@ -1,6 +1,6 @@
 [package]
 name = "float"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Float - minimal utility to keep a window always on top."
 authors = ["Float Team"]

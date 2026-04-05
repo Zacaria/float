@@ -1,11 +1,10 @@
 # Releasing Float
 
-Float ships publicly as a notarized macOS download hosted on GitHub Releases and promoted through GitHub Pages. The public deliverables are:
+Float ships publicly through GitHub Releases, with the macOS download promoted through GitHub Pages. The public deliverables are:
 
 - `Float-macos-universal.dmg`
 - `Float-macos-universal.sha256`
-
-Windows can continue to build as an internal preview artifact, but it is not part of the public release surface yet.
+- `Float-windows-x64-setup.exe`
 
 ## CI secret contract
 
@@ -17,7 +16,7 @@ The `release-bundles` workflow expects these repository secrets:
 - `APPLE_PASSWORD`: app-specific password for the Apple account.
 - `APPLE_TEAM_ID`: Apple Developer team identifier.
 
-The workflow imports the certificate, resolves the `Developer ID Application` signing identity, builds a universal Tauri bundle, explicitly notarizes the generated DMG, staples the app and DMG, validates notarization, and publishes only the stable macOS assets to GitHub Releases.
+The workflow imports the certificate, resolves the `Developer ID Application` signing identity, builds a universal Tauri bundle, explicitly notarizes the generated DMG, staples the app and DMG, validates notarization, builds the Windows NSIS installer, and publishes the stable macOS and Windows assets to GitHub Releases.
 
 ## GitHub Pages landing page
 
@@ -26,7 +25,7 @@ The marketing/download site lives under `site/` and deploys with `.github/workfl
 - Public download CTA: `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg`
 - Checksum CTA: `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256`
 
-When updating the landing page, keep it macOS-only until the Windows public release path has signing, trust, and support language of its own.
+When updating the landing page, keep it macOS-only until the Windows public release path has its own landing-page support language.
 
 ## Manual fallback
 
@@ -80,7 +79,7 @@ cp "$DMG_PATH" Float-macos-universal.dmg
 shasum -a 256 Float-macos-universal.dmg > Float-macos-universal.sha256
 ```
 
-7. Upload both files to the tagged GitHub Release.
+7. Upload the macOS files plus the Windows installer to the tagged GitHub Release.
 
 ## Release checklist
 
@@ -92,7 +91,7 @@ Before creating the tag:
 
 After the tag build finishes:
 
-- Verify the release contains `Float-macos-universal.dmg` and `Float-macos-universal.sha256`
+- Verify the release contains `Float-macos-universal.dmg`, `Float-macos-universal.sha256`, and `Float-windows-x64-setup.exe`
 - Download the DMG from the release, compare the checksum, and test the install from a clean macOS machine
 - Confirm first launch, file open, fit-to-image, aspect lock, slideshow, multi-file navigation, and persistence all work
 - Confirm the GitHub Pages download button resolves to the latest release asset
