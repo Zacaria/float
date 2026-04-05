@@ -19,5 +19,4 @@ The project MUST use release-plz to generate changelog entries, create git tags 
 #### Scenario: Artifacts attached by bundling workflow
 - Given a Release exists for tag `v*`
 - When the bundling workflow runs on that tag
-- Then macOS and Windows artifacts are uploaded to the same GitHub Release
-
+- Then the GitHub Release contains `Float-macos-universal.dmg`, `Float-macos-universal.sha256`, and `Float-windows-x64-setup.exe`

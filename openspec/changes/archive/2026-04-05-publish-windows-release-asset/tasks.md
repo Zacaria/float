@@ -5,4 +5,4 @@
 
 ## 2. Validation
 - [x] 2.1 Run `openspec validate publish-windows-release-asset --strict`.
-- [ ] 2.2 Trigger a tagged release build and verify the resulting GitHub Release contains the macOS DMG, macOS checksum, and Windows installer asset.
+- [x] 2.2 Trigger a tagged release build and verify the resulting GitHub Release contains the macOS DMG, macOS checksum, and Windows installer asset.
