@@ -11,6 +11,7 @@ The application MUST provide a manual Fit action (button/menu/shortcut) that adj
 - And the user triggers the Fit action
 - Then the window keeps its larger dimension unchanged (width or height, whichever is greater)
 - And the other dimension is reduced to match the image’s aspect ratio without upscaling
+- And neither dimension increases beyond its size before the fit action runs
 
 #### Scenario: Auto-fit toggle removed
 - Given the user selects a new image

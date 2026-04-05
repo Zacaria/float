@@ -4,25 +4,20 @@
 TBD - created by archiving change create-macos-keep-on-top-app. Update Purpose after archive.
 ## Requirements
 ### Requirement: Package as a macOS app bundle
-The project MUST build distributable artifacts for macOS and Windows using the Tauri bundler, producing a macOS app bundle and a Windows NSIS installer, and the README MUST document the commands and output locations for these bundles plus the current Linux support status (manual dev run only, no packaged binary yet). GitHub Actions MUST build and upload these artifacts to GitHub Releases for distribution.
+The project MUST build distributable artifacts for macOS and Windows using the Tauri bundler, producing a macOS app bundle and a Windows NSIS installer. macOS contributors MUST also be able to cross-build the Windows release executable for quick validation.
 
 #### Scenario: Build macOS app bundle
 - Given the Rust and Tauri toolchains are installed
-- When the developer runs the documented bundle command from the README (e.g., `just tauri-build`)
-- Then a macOS `.app` is produced under `src-tauri/target/release/bundle/macos/` or equivalent and the README reflects this location
+- When the developer runs `tauri build` (or `cargo tauri build`)
+- Then a macOS `.app` is produced under `src-tauri/target/release/bundle/macos/` or equivalent
 
 #### Scenario: Build Windows installer (NSIS)
 - Given the Rust and Tauri toolchains are installed on Windows
-- When the developer runs the documented bundle command from the README
-- Then a Windows NSIS installer (`.exe`) is produced under `src-tauri/target/release/bundle/nsis/` and the README reflects this location
+- When the developer runs `tauri build`
+- Then a Windows NSIS installer (`.exe`) is produced under `src-tauri/target/release/bundle/nsis/`
 
-#### Scenario: Linux support documented
-- Given a Linux user reads the README
-- When they review install and download notes
-- Then it states that Linux builds are not yet provided and directs them to run the dev server/binary locally if they wish to experiment
-
-#### Scenario: CI artifacts published
-- Given a release workflow runs on GitHub Actions
-- When a release is built
-- Then macOS and Windows artifacts are uploaded to the GitHub Releases page for download
+#### Scenario: Cross-build Windows executable from macOS
+- Given a macOS developer installed `cargo-xwin`, added the `x86_64-pc-windows-msvc` Rust target, and has the repo dependencies installed
+- When they run `just tauri-build-windows`
+- Then a Windows release executable is generated at `src-tauri/target/x86_64-pc-windows-msvc/release/Float.exe` for testing or sharing
 
