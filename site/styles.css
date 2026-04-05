@@ -7,6 +7,8 @@
   --muted: rgba(242, 238, 232, 0.72);
   --accent: #ff8b5d;
   --accent-soft: rgba(255, 139, 93, 0.16);
+  --windows-accent: #6ab2ff;
+  --windows-soft: rgba(106, 178, 255, 0.16);
   --shadow: 0 30px 80px rgba(0, 0, 0, 0.38);
   --hero-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   --ui-sans: "Avenir Next Condensed", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
@@ -158,11 +160,95 @@ a {
   margin: 1.2rem 0 0;
 }
 
+.hero-downloads {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.8rem 0 1rem;
+}
+
+.download-tile {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  min-height: 8.4rem;
+  padding: 1.2rem 1.25rem 1.25rem;
+  border-radius: 1.6rem;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.download-tile::after {
+  content: "";
+  position: absolute;
+  inset: auto -15% -45% auto;
+  width: 9rem;
+  height: 9rem;
+  border-radius: 50%;
+  opacity: 0.9;
+  filter: blur(18px);
+}
+
+.download-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+.download-platform {
+  position: relative;
+  z-index: 1;
+  font-size: 0.74rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(242, 238, 232, 0.7);
+}
+
+.download-tile strong {
+  position: relative;
+  z-index: 1;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.download-note {
+  position: relative;
+  z-index: 1;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.download-macos {
+  background:
+    linear-gradient(135deg, rgba(255, 139, 93, 0.28), rgba(255, 139, 93, 0.08)),
+    rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 139, 93, 0.32);
+}
+
+.download-macos::after {
+  background: rgba(255, 139, 93, 0.28);
+}
+
+.download-windows {
+  background:
+    linear-gradient(135deg, rgba(106, 178, 255, 0.24), rgba(106, 178, 255, 0.08)),
+    rgba(255, 255, 255, 0.03);
+  border-color: rgba(106, 178, 255, 0.32);
+}
+
+.download-windows::after {
+  background: rgba(106, 178, 255, 0.24);
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.9rem;
-  margin: 1.6rem 0;
+  margin: 0 0 1.4rem;
 }
 
 .button {
@@ -191,6 +277,10 @@ a {
 
 .button-secondary {
   background: rgba(255, 255, 255, 0.04);
+}
+
+.button-ghost {
+  background: transparent;
 }
 
 .hero-meta {
@@ -419,6 +509,10 @@ a {
   .feature-runway {
     gap: 0.2rem;
   }
+
+  .hero-downloads {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -437,7 +531,8 @@ a {
     align-items: flex-start;
   }
 
-  .button {
+  .button,
+  .download-tile {
     width: 100%;
   }
 

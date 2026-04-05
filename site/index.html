@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Float for macOS</title>
+    <title>Float for macOS and Windows</title>
     <meta
       name="description"
-      content="Float is a tiny always-on-top image viewer for macOS. Download the notarized build, keep reference images pinned above your workspace, and stay in flow."
+      content="Float is a tiny always-on-top image viewer for macOS and Windows. Download the notarized Mac build or the Windows installer, keep reference images pinned above your workspace, and stay in flow."
     />
     <link rel="icon" href="./assets/float-icon.png" />
     <link rel="stylesheet" href="./styles.css" />
@@ -17,7 +17,7 @@
         <div class="brand-lockup">
           <img class="brand-mark" src="./assets/float-icon.png" alt="Float app icon" />
           <div>
-            <p class="eyebrow">Pinned utility for macOS</p>
+            <p class="eyebrow">Pinned utility for macOS + Windows</p>
             <a class="brand-name" href="https://github.com/Zacaria/float">Float</a>
           </div>
         </div>
@@ -34,25 +34,41 @@
             <p class="hero-kicker">Always on top, without the ceremony</p>
             <h1>Keep the image you need hovering over the work that matters.</h1>
             <p class="hero-body">
-              Float is a compact macOS viewer for cheat sheets, mockups, diagrams, and reference
-              images. Open a file, fit it instantly, and keep it pinned above your editor, browser,
-              or design tools.
+              Float is a compact viewer for cheat sheets, mockups, diagrams, and reference images.
+              Open a file, fit it instantly, and keep it pinned above your editor, browser, or
+              design tools on macOS or Windows.
             </p>
-            <div class="hero-actions">
+            <div class="hero-downloads" role="group" aria-label="Download Float">
               <a
-                class="button button-primary"
+                class="download-tile download-macos"
                 href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg"
-                >Download for macOS</a
               >
+                <span class="download-platform">macOS</span>
+                <strong>Download DMG</strong>
+                <span class="download-note">Universal build for Apple Silicon and Intel</span>
+              </a>
+              <a
+                class="download-tile download-windows"
+                href="https://github.com/Zacaria/float/releases/latest/download/Float-windows-x64-setup.exe"
+              >
+                <span class="download-platform">Windows</span>
+                <strong>Download Setup</strong>
+                <span class="download-note">NSIS installer for x64 desktops</span>
+              </a>
+            </div>
+            <div class="hero-actions">
               <a
                 class="button button-secondary"
                 href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256"
-                >Checksum</a
+                >macOS checksum</a
+              >
+              <a class="button button-ghost" href="https://github.com/Zacaria/float/releases/latest"
+                >All release assets</a
               >
             </div>
             <ul class="hero-meta">
-              <li>Universal build for Apple Silicon and Intel</li>
-              <li>Developer ID signed and notarized</li>
+              <li>macOS build is Developer ID signed and notarized</li>
+              <li>Windows ships as a direct x64 installer on every tagged release</li>
               <li>Distributed directly through GitHub Releases</li>
             </ul>
           </div>
@@ -103,10 +119,10 @@
           </article>
           <article>
             <p class="eyebrow">Trusted download</p>
-            <h3>Ship a direct macOS build with the checks users expect.</h3>
+            <h3>Choose the platform build you need without digging through CI output.</h3>
             <p>
-              Public downloads come from GitHub Releases with a stable asset name, checksum, and a
-              notarized DMG so the install path feels legitimate instead of improvised.
+              Public downloads come from GitHub Releases with stable asset names, a checksum for
+              the macOS DMG, and separate installers for macOS and Windows.
             </p>
           </article>
         </section>
@@ -136,12 +152,12 @@
         <section class="release-panel">
           <div>
             <p class="eyebrow">Release details</p>
-            <h2>Install the current public build in a minute.</h2>
+            <h2>Pick the build that matches your machine and install in a minute.</h2>
           </div>
           <ol class="install-steps">
-            <li>Download the latest notarized DMG.</li>
-            <li>Open it and drag Float into Applications.</li>
-            <li>Launch Float, press <span>⌘O</span>, and open your first image.</li>
+            <li>Download the latest macOS DMG or Windows setup file.</li>
+            <li>On macOS, drag Float into Applications. On Windows, run the installer.</li>
+            <li>Launch Float, press <span>⌘O</span> or <span>Ctrl+O</span>, and open your first image.</li>
           </ol>
           <div class="release-links">
             <a href="https://github.com/Zacaria/float/releases/latest">Latest release notes</a>
