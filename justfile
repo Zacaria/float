@@ -44,6 +44,16 @@ tauri-open:
 	APP_TAURI="src-tauri/target/release/bundle/macos/Float.app"
 	if [ -d "$APP_TAURI" ]; then open "$APP_TAURI"; else echo "App not found: $APP_TAURI" >&2; exit 1; fi
 
+# Validate commit subjects against Conventional Commits.
+check-commits range="HEAD~1..HEAD":
+	set -euo pipefail
+	./scripts/check-conventional-commits.sh "{{range}}"
+
+# Use repository-managed git hooks, including the commit-msg guard.
+install-git-hooks:
+	set -euo pipefail
+	git config core.hooksPath .githooks
+
 # Run release-plz to bump versions, create tag, and push branch+tags
 # Requires clean working tree and access to origin remote.
 release-bump:
