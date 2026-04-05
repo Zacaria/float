@@ -24,9 +24,8 @@ Relevant specs: `specs/always-on-top/`, `specs/file-selection/`, `specs/fit-wind
   - Linux: system dependencies per Tauri docs; only dev run covered here.
 - Optional: `just` for common tasks (install via `cargo install just`).
 
-## Quick Start (Tauri shell)
+## Local Development
 ```sh
-# Clone and enter repo
 just tauri-dev            # Runs Tauri in dev mode
 ```
 - The window launches always-on-top; use File → Open… to pick an image.
@@ -36,11 +35,11 @@ just tauri-dev            # Runs Tauri in dev mode
 - Install the Tauri WebDriver once via `cargo install tauri-driver --locked` so the `tauri-driver` binary is on your `PATH` (or export `TAURI_DRIVER_PATH` pointing to it).
 - Execute `npm run test:ui` to run the Playwright spec in `tests/`.
 
-### Build Bundles (release artifacts)
+## Internal Packaging
 ```sh
 just tauri-build          # macOS .app + Windows NSIS installer
 ```
-Artifacts:
+Outputs:
 - macOS app bundle: `src-tauri/target/release/bundle/macos/Float.app`
 - Windows NSIS installer: `src-tauri/target/release/bundle/nsis/Float_*.exe`
 
@@ -49,7 +48,7 @@ To open the built macOS app locally:
 just tauri-open
 ```
 
-### Cross-build Windows executable (macOS host)
+### Windows cross-build from macOS
 ```sh
 just tauri-build-windows
 ```
@@ -62,17 +61,40 @@ just build-run            # cargo run
 just bundle-run           # cargo bundle --release (macOS .app)
 ```
 
-## Downloads
-- GitHub Actions (workflow: `release-bundles`) builds macOS and Windows artifacts and uploads them to the Releases page when a tag (`v*`) is pushed or the workflow is dispatched manually.
-- If no release is published yet, build locally using the commands above.
-- Linux packages are not produced; run locally on Linux if needed.
+## Public Release
 
-## Release Pipeline (manual + CI)
-1) Ensure `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo check` pass.
-2) Release automation: `.github/workflows/release-plz.yml` (runs on `main` pushes or manual dispatch) uses `release-plz` to update `CHANGELOG.md`, bump versions, tag with `v*`, and create the GitHub Release (no crates.io publish).
-3) Bundles on tags: `.github/workflows/release-bundles.yml` builds on `v*` tags (or manual dispatch), uploads build artifacts as workflow artifacts, and publishes/updates the GitHub Release with the macOS zip + Windows installer.
-4) Local build sanity (optional): `just tauri-build`; collect artifacts from `src-tauri/target/release/bundle/macos/Float.app` and `src-tauri/target/release/bundle/nsis/Float_*.exe`.
-5) Draft release notes summarizing changes and link relevant OpenSpec change IDs (release-plz populates the changelog automatically).
+The public distribution channel is:
+
+- GitHub Pages for the landing page
+- GitHub Releases for the notarized macOS download
+
+Public macOS assets are published with stable names:
+
+- `Float-macos-universal.dmg`
+- `Float-macos-universal.sha256`
+
+The landing page lives in `site/` and links to:
+
+- `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg`
+- `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256`
+
+### CI release flow
+
+1. `release-plz` updates `CHANGELOG.md`, versions, tags, and the GitHub Release from `.github/workflows/release-plz.yml`.
+2. `.github/workflows/release-bundles.yml` builds a universal macOS bundle on `v*` tags, signs it with a `Developer ID Application` certificate, staples and validates the notarized app and DMG, generates `Float-macos-universal.sha256`, and publishes the macOS assets to the GitHub Release.
+3. `.github/workflows/pages.yml` deploys the static landing page from `site/` to GitHub Pages on `master`.
+
+### CI secret contract
+
+The macOS public release workflow requires these repository secrets:
+
+- `APPLE_CERTIFICATE`
+- `APPLE_CERTIFICATE_PASSWORD`
+- `APPLE_ID`
+- `APPLE_PASSWORD`
+- `APPLE_TEAM_ID`
+
+See [`docs/releasing.md`](docs/releasing.md) for the exact contract, fallback commands, and the release checklist.
 
 ## Troubleshooting
 - **Tauri missing deps**: install platform prereqs (Xcode CLT on macOS; MSVC + WebView2 on Windows).
@@ -82,3 +104,5 @@ just bundle-run           # cargo bundle --release (macOS .app)
 ## Contributing
 - Specs live under `openspec/specs/`; proposed changes go in `openspec/changes/`.
 - Prefer `just tauri-dev` for local runs; keep changes small and update specs when behavior changes.
+- Commit subjects must use Conventional Commits such as `feat: ...`, `fix(menu): ...`, or `chore!: ...`.
+- Run `just install-git-hooks` once to enable the local `commit-msg` guard, or validate a range manually with `just check-commits origin/main..HEAD`.
