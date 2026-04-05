@@ -70,7 +70,7 @@ xcrun stapler validate "$APP_PATH"
 xcrun stapler staple "$DMG_PATH"
 xcrun stapler validate "$DMG_PATH"
 spctl -a -vvv "$APP_PATH"
-spctl -a -vvv -t open "$DMG_PATH"
+spctl -a -vvv -t open --context context:primary-signature "$DMG_PATH"
 ```
 
 6. Rename to the stable public asset names and create the checksum:

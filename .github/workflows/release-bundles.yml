@@ -109,7 +109,7 @@ jobs:
           xcrun stapler staple "$dmg_path"
           xcrun stapler validate "$dmg_path"
           spctl -a -vvv "$app_path"
-          spctl -a -vvv -t open "$dmg_path"
+          spctl -a -vvv -t open --context context:primary-signature "$dmg_path"
 
       - name: Create stable public artifacts
         run: |
