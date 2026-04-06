@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' tauri: asset: file: data: blob: filesystem:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' ipc:">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Float Settings</title>
+    <style>
+      :root {
+        --surface-0: #0c1015;
+        --surface-1: rgba(19, 24, 30, 0.94);
+        --surface-2: rgba(29, 36, 44, 0.96);
+        --line-soft: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.16);
+        --text-main: #edf2f7;
+        --text-muted: #9aa6b2;
+        --text-soft: #6f7b86;
+        --accent: #cfd8ff;
+        --accent-strong: #f3f7ff;
+        --shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.32);
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top, rgba(207, 216, 255, 0.09), transparent 34%),
+          linear-gradient(180deg, #11161d, #090c11);
+        color: var(--text-main);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        padding: 20px;
+        box-sizing: border-box;
+      }
+
+      .settings-shell {
+        min-height: calc(100vh - 40px);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(16, 20, 26, 0.98), rgba(10, 13, 18, 0.99));
+        border: 1px solid var(--line-soft);
+        box-shadow: var(--shadow-soft);
+        overflow: hidden;
+      }
+
+      .settings-header {
+        padding: 24px 24px 14px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .settings-title {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 650;
+        letter-spacing: -0.04em;
+      }
+
+      .settings-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 16px 24px 0;
+      }
+
+      .settings-tab {
+        appearance: none;
+        border: 1px solid var(--line-soft);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-muted);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .settings-tab.active {
+        background: rgba(207, 216, 255, 0.14);
+        color: var(--accent-strong);
+        border-color: rgba(207, 216, 255, 0.2);
+      }
+
+      .settings-body {
+        padding: 18px 24px 24px;
+      }
+
+      .settings-view {
+        display: none;
+      }
+
+      .settings-view.active {
+        display: block;
+      }
+
+      .settings-pane {
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--line-soft);
+        overflow: hidden;
+      }
+
+      .settings-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+      }
+
+      .settings-row + .settings-row {
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .settings-meta {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .settings-label {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .settings-help {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .settings-control {
+        flex-shrink: 0;
+      }
+
+      .toggle {
+        position: relative;
+        display: inline-flex;
+        height: 28px;
+        width: 48px;
+      }
+
+      .toggle input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .toggle-track {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        transition: background 0.18s ease;
+      }
+
+      .toggle-thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+        transition: transform 0.18s ease;
+      }
+
+      .toggle input:checked + .toggle-track {
+        background: rgba(207, 216, 255, 0.42);
+      }
+
+      .toggle input:checked + .toggle-track + .toggle-thumb {
+        transform: translateX(20px);
+      }
+
+      .toggle input:disabled + .toggle-track {
+        opacity: 0.4;
+      }
+
+      .range-wrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      input[type="range"] {
+        width: 150px;
+      }
+
+      .range-value,
+      .shortcut-key {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 56px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--accent-strong);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .settings-select {
+        appearance: none;
+        border-radius: 12px;
+        border: 1px solid var(--line-strong);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-main);
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+
+      .settings-note {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 560px) {
+        body {
+          padding: 12px;
+        }
+
+        .settings-shell {
+          min-height: calc(100vh - 24px);
+        }
+
+        .settings-header,
+        .settings-body,
+        .settings-tabs {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+
+        .settings-header {
+          padding-bottom: 12px;
+        }
+
+        .settings-row {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .settings-control {
+          width: 100%;
+        }
+
+        .range-wrap {
+          width: 100%;
+        }
+
+        input[type="range"] {
+          flex: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="settings-shell">
+      <div class="settings-header">
+        <h1 id="settingsTitle" class="settings-title">Settings</h1>
+      </div>
+
+      <div class="settings-tabs">
+        <button class="settings-tab active" type="button" data-tab-target="behavior">Behavior</button>
+        <button class="settings-tab" type="button" data-tab-target="appearance">Appearance</button>
+      </div>
+
+      <div class="settings-body">
+        <section id="settingsBehavior" class="settings-view active">
+          <div class="settings-pane">
+            <div class="settings-row">
+              <div class="settings-meta">
+                <p class="settings-label">Lock aspect ratio</p>
+                <p class="settings-help">Keep manual window resizing constrained to the current image proportions.</p>
+              </div>
+              <div class="settings-control">
+                <label class="toggle">
+                  <input id="settingsAspectLock" type="checkbox" />
+                  <span class="toggle-track"></span>
+                  <span class="toggle-thumb"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-meta">
+                <p class="settings-label">Click-through overlay</p>
+                <p class="settings-help">Let viewer windows stay visible without catching pointer input when you are working underneath them.</p>
+              </div>
+              <div class="settings-control">
+                <label class="toggle">
+                  <input id="settingsClickThrough" type="checkbox" />
+                  <span class="toggle-track"></span>
+                  <span class="toggle-thumb"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-meta">
+                <p class="settings-label">Slideshow interval</p>
+                <p class="settings-help">Used when a viewer window has more than one image.</p>
+              </div>
+              <div class="settings-control">
+                <select id="settingsSlideshowInterval" class="settings-select" aria-label="Slideshow interval">
+                  <option value="2000">2 seconds</option>
+                  <option value="5000">5 seconds</option>
+                  <option value="10000">10 seconds</option>
+                  <option value="15000">15 seconds</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="settingsAppearance" class="settings-view" aria-hidden="true">
+          <div class="settings-pane">
+
+            <div class="settings-row">
+              <div class="settings-meta">
+                <p class="settings-label">Window opacity</p>
+                <p class="settings-help">This adjusts the real viewer window transparency, not just the app chrome.</p>
+              </div>
+              <div class="settings-control">
+                <div class="range-wrap">
+                  <input id="settingsOpacity" type="range" min="35" max="100" step="5" />
+                  <span id="settingsOpacityValue" class="range-value">100%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-meta">
+                <p class="settings-label">Native blur</p>
+                <p class="settings-help">Uses the host compositor when available. Support can vary by platform and window stack.</p>
+              </div>
+              <div class="settings-control">
+                <label class="toggle">
+                  <input id="settingsBlur" type="checkbox" />
+                  <span class="toggle-track"></span>
+                  <span class="toggle-thumb"></span>
+                </label>
+              </div>
+            </div>
+            <div id="settingsBlurNote" class="settings-note">Blur uses native window effects when the current platform supports them.</div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const tauri = window.__TAURI__ || {};
+      const invoke = (cmd, args) => {
+        if (tauri?.core?.invoke) return tauri.core.invoke(cmd, args);
+        if (tauri.invoke) return tauri.invoke(cmd, args);
+        return Promise.resolve();
+      };
+
+      const settingsTabButtons = Array.from(document.querySelectorAll('.settings-tab'));
+      const settingsViews = {
+        behavior: document.getElementById('settingsBehavior'),
+        appearance: document.getElementById('settingsAppearance'),
+      };
+      const settingsAspectLockEl = document.getElementById('settingsAspectLock');
+      const settingsClickThroughEl = document.getElementById('settingsClickThrough');
+      const settingsOpacityEl = document.getElementById('settingsOpacity');
+      const settingsOpacityValueEl = document.getElementById('settingsOpacityValue');
+      const settingsBlurEl = document.getElementById('settingsBlur');
+      const settingsBlurNoteEl = document.getElementById('settingsBlurNote');
+      const settingsSlideshowIntervalEl = document.getElementById('settingsSlideshowInterval');
+
+      const settingsState = {
+        aspect_lock: false,
+        click_through: false,
+        slideshow_enabled: false,
+        slideshow_interval_ms: 5000,
+        opacity_percent: 100,
+        blur_enabled: false,
+      };
+
+      const platformCapabilities = {
+        blur: false,
+      };
+
+      const syncControls = () => {
+        settingsAspectLockEl.checked = Boolean(settingsState.aspect_lock);
+        settingsClickThroughEl.checked = Boolean(settingsState.click_through);
+        settingsOpacityEl.value = String(settingsState.opacity_percent ?? 100);
+        settingsOpacityValueEl.textContent = `${settingsOpacityEl.value}%`;
+        settingsBlurEl.checked = Boolean(settingsState.blur_enabled);
+        settingsBlurEl.disabled = !platformCapabilities.blur;
+        settingsSlideshowIntervalEl.value = String(settingsState.slideshow_interval_ms ?? 5000);
+        settingsBlurNoteEl.textContent = platformCapabilities.blur
+          ? 'Blur uses native window effects when the current platform supports them.'
+          : 'Blur is not available on this platform, so Float keeps viewer windows crisp.';
+      };
+
+      const applySettingsState = (nextState = {}) => {
+        Object.assign(settingsState, nextState);
+        if (typeof nextState.blur_supported === 'boolean') {
+          platformCapabilities.blur = nextState.blur_supported;
+        }
+        syncControls();
+      };
+
+      const persistSettings = async (update) => {
+        try {
+          const nextState = await invoke('set_settings', { update });
+          applySettingsState(nextState || update);
+        } catch (err) {
+          console.warn('Failed to persist settings', err);
+        }
+      };
+
+      const loadSettings = async () => {
+        try {
+          const settings = await invoke('get_settings');
+          applySettingsState(settings || {});
+        } catch (err) {
+          console.warn('Failed to load settings', err);
+        }
+      };
+
+      const activateSettingsTab = (name) => {
+        settingsTabButtons.forEach((button) => {
+          button.classList.toggle('active', button.dataset.tabTarget === name);
+        });
+        Object.entries(settingsViews).forEach(([viewName, element]) => {
+          const active = viewName === name;
+          element.classList.toggle('active', active);
+          element.setAttribute('aria-hidden', String(!active));
+        });
+      };
+
+      const registerListeners = () => {
+        if (!tauri?.event?.listen) return;
+        tauri.event
+          .listen('settings-changed', async (event) => {
+            applySettingsState(event?.payload || {});
+          })
+          .catch((err) => console.warn('Failed to register settings-changed listener', err));
+      };
+
+      settingsAspectLockEl.addEventListener('change', async () => {
+        await persistSettings({ aspect_lock: settingsAspectLockEl.checked });
+      });
+
+      settingsClickThroughEl.addEventListener('change', async () => {
+        await persistSettings({ click_through: settingsClickThroughEl.checked });
+      });
+
+      settingsOpacityEl.addEventListener('input', () => {
+        settingsOpacityValueEl.textContent = `${settingsOpacityEl.value}%`;
+      });
+
+      settingsOpacityEl.addEventListener('change', async () => {
+        await persistSettings({ opacity_percent: Number(settingsOpacityEl.value) });
+      });
+
+      settingsBlurEl.addEventListener('change', async () => {
+        await persistSettings({ blur_enabled: settingsBlurEl.checked });
+      });
+
+      settingsSlideshowIntervalEl.addEventListener('change', async () => {
+        await persistSettings({ slideshow_interval_ms: Number(settingsSlideshowIntervalEl.value) });
+      });
+
+      settingsTabButtons.forEach((button) => {
+        button.addEventListener('click', () => activateSettingsTab(button.dataset.tabTarget));
+      });
+
+      loadSettings();
+      registerListeners();
+    </script>
+  </body>
+</html>

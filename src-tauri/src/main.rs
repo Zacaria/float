@@ -14,10 +14,22 @@ use tauri::menu::{
     CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
 };
 use tauri::{
-    async_runtime, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WindowEvent, Wry,
+    async_runtime,
+    window::{Effect, EffectsBuilder},
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WindowEvent, Wry,
 };
 use tauri_plugin_dialog::DialogExt;
 use tokio::time::sleep;
+
+#[cfg(target_os = "macos")]
+use objc2_app_kit::NSWindow;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::{
+    Foundation::HWND,
+    UI::WindowsAndMessaging::{LWA_ALPHA, SetLayeredWindowAttributes},
+};
+
+const SETTINGS_WINDOW_LABEL: &str = "settings";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -29,11 +41,12 @@ enum WindowSizeUnits {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 struct PersistedState {
-    last_file: Option<String>,
     aspect_lock: bool,
     click_through: bool,
     slideshow_enabled: bool,
     slideshow_interval_ms: u64,
+    opacity_percent: u8,
+    blur_enabled: bool,
     window_w: Option<f64>,
     window_h: Option<f64>,
     window_size_units: Option<WindowSizeUnits>,
@@ -42,11 +55,12 @@ struct PersistedState {
 impl Default for PersistedState {
     fn default() -> Self {
         Self {
-            last_file: None,
             aspect_lock: false,
             click_through: false,
             slideshow_enabled: false,
             slideshow_interval_ms: 5000,
+            opacity_percent: 100,
+            blur_enabled: false,
             window_w: None,
             window_h: None,
             window_size_units: None,
@@ -59,6 +73,17 @@ struct ActiveFilePayload {
     path: Option<String>,
     index: Option<usize>,
     total: Option<usize>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct SettingsPayload {
+    aspect_lock: bool,
+    click_through: bool,
+    slideshow_enabled: bool,
+    slideshow_interval_ms: u64,
+    opacity_percent: u8,
+    blur_enabled: bool,
+    blur_supported: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -88,7 +113,7 @@ struct AppState {
     slideshow_toggle: Mutex<Option<CheckMenuItem<Wry>>>,
     pending_save: Mutex<HashMap<String, async_runtime::JoinHandle<()>>>,
     selections: Mutex<HashMap<String, SelectionState>>, // per-window selections
-    last_focused_window: Mutex<Option<String>>,         // label of last focused window
+    last_focused_window: Mutex<Option<String>>,         // label of last focused viewer window
     window_counter: AtomicUsize,
 }
 
@@ -154,7 +179,11 @@ fn load_state(app: &AppHandle) -> PersistedState {
 
 fn logical_outer_size(win: &WebviewWindow) -> Option<(f64, f64)> {
     if let (Ok(size), Ok(scale_factor)) = (win.outer_size(), win.scale_factor()) {
-        let safe_scale = if scale_factor > 0.0 { scale_factor } else { 1.0 };
+        let safe_scale = if scale_factor > 0.0 {
+            scale_factor
+        } else {
+            1.0
+        };
         return Some((
             (size.width as f64) / safe_scale,
             (size.height as f64) / safe_scale,
@@ -163,15 +192,21 @@ fn logical_outer_size(win: &WebviewWindow) -> Option<(f64, f64)> {
     None
 }
 
-fn save_state(app: &AppHandle, win: &WebviewWindow, mut st: PersistedState) -> Result<(), Error> {
-    if let Some((logical_w, logical_h)) = logical_outer_size(win) {
-        st.window_w = Some(logical_w);
-        st.window_h = Some(logical_h);
-        st.window_size_units = Some(WindowSizeUnits::Logical);
-    } else if let Ok(size) = win.outer_size() {
-        st.window_w = Some(size.width as f64);
-        st.window_h = Some(size.height as f64);
-        st.window_size_units = Some(WindowSizeUnits::Physical);
+fn save_state(
+    app: &AppHandle,
+    win: Option<&WebviewWindow>,
+    mut st: PersistedState,
+) -> Result<(), Error> {
+    if let Some(win) = win.filter(|win| is_viewer_window_label(win.label())) {
+        if let Some((logical_w, logical_h)) = logical_outer_size(win) {
+            st.window_w = Some(logical_w);
+            st.window_h = Some(logical_h);
+            st.window_size_units = Some(WindowSizeUnits::Logical);
+        } else if let Ok(size) = win.outer_size() {
+            st.window_w = Some(size.width as f64);
+            st.window_h = Some(size.height as f64);
+            st.window_size_units = Some(WindowSizeUnits::Physical);
+        }
     }
     let path = config_path(app)?;
     fs::write(path, serde_json::to_vec_pretty(&st)?)?;
@@ -191,10 +226,10 @@ fn schedule_size_save(app: AppHandle, label: String, win: WebviewWindow) {
             sleep(Duration::from_millis(500)).await;
             if let Some(state) = app_for_task.try_state::<AppState>() {
                 let st = state.settings.lock().clone();
-                let _ = save_state(&app_for_task, &win_for_task, st);
+                let _ = save_state(&app_for_task, Some(&win_for_task), st);
             } else {
                 let st = load_state(&app_for_task);
-                let _ = save_state(&app_for_task, &win_for_task, st);
+                let _ = save_state(&app_for_task, Some(&win_for_task), st);
             }
             if let Some(state) = app_for_task.try_state::<AppState>() {
                 state.pending_save.lock().remove(&label_for_task);
@@ -204,28 +239,165 @@ fn schedule_size_save(app: AppHandle, label: String, win: WebviewWindow) {
     }
 }
 
-fn spawn_empty_window(app: &AppHandle) -> Result<(), Error> {
-    let window = tauri::WebviewWindowBuilder::new(
+fn blur_supported() -> bool {
+    cfg!(target_os = "windows")
+}
+
+fn settings_payload(settings: &PersistedState) -> SettingsPayload {
+    SettingsPayload {
+        aspect_lock: settings.aspect_lock,
+        click_through: settings.click_through,
+        slideshow_enabled: settings.slideshow_enabled,
+        slideshow_interval_ms: settings.slideshow_interval_ms,
+        opacity_percent: settings.opacity_percent,
+        blur_enabled: settings.blur_enabled,
+        blur_supported: blur_supported(),
+    }
+}
+
+fn emit_settings_changed(app: &AppHandle, settings: &PersistedState) {
+    let payload = settings_payload(settings);
+    for (_, window) in app.webview_windows() {
+        let _ = window.emit("settings-changed", payload.clone());
+    }
+}
+
+fn is_settings_window_label(label: &str) -> bool {
+    label == SETTINGS_WINDOW_LABEL
+}
+
+fn is_viewer_window_label(label: &str) -> bool {
+    !is_settings_window_label(label)
+}
+
+fn viewer_windows(app: &AppHandle) -> Vec<WebviewWindow> {
+    app.webview_windows()
+        .into_iter()
+        .filter_map(|(label, window)| is_viewer_window_label(&label).then_some(window))
+        .collect()
+}
+
+fn opacity_factor(settings: &PersistedState) -> f64 {
+    (settings.opacity_percent.clamp(35, 100) as f64) / 100.0
+}
+
+#[cfg(target_os = "macos")]
+fn apply_native_window_opacity(window: &WebviewWindow, settings: &PersistedState) {
+    if let Ok(ns_window) = window.ns_window() {
+        unsafe {
+            let window: &NSWindow = &*ns_window.cast();
+            window.setAlphaValue(opacity_factor(settings));
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn apply_native_window_opacity(window: &WebviewWindow, settings: &PersistedState) {
+    if let Ok(hwnd) = window.hwnd() {
+        unsafe {
+            let alpha = (opacity_factor(settings) * 255.0).round() as u8;
+            let _ = SetLayeredWindowAttributes(hwnd.0 as HWND, 0, alpha, LWA_ALPHA);
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn apply_native_window_opacity(_window: &WebviewWindow, _settings: &PersistedState) {}
+
+fn apply_window_appearance(window: &WebviewWindow, settings: &PersistedState) {
+    apply_native_window_opacity(window, settings);
+
+    let result = if blur_supported() && settings.blur_enabled {
+        window.set_effects(EffectsBuilder::new().effect(Effect::Blur).build())
+    } else {
+        window.set_effects(None::<tauri::utils::config::WindowEffectsConfig>)
+    };
+
+    if let Err(err) = result {
+        eprintln!("window effects update failed: {err}");
+    }
+}
+
+fn apply_window_appearance_to_all_windows(app: &AppHandle, settings: &PersistedState) {
+    for window in viewer_windows(app) {
+        apply_window_appearance(&window, settings);
+    }
+}
+
+fn open_settings_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+
+    let builder = tauri::WebviewWindowBuilder::new(
+        app,
+        SETTINGS_WINDOW_LABEL,
+        WebviewUrl::App("settings.html".into()),
+    )
+    .title("Float Settings")
+    .visible(true)
+    .focused(true)
+    .resizable(true)
+    .decorations(true)
+    .inner_size(540.0, 680.0)
+    .always_on_top(false);
+
+    match builder.build() {
+        Ok(window) => {
+            let _ = window.set_focus();
+            if let Some(state) = app.try_state::<AppState>() {
+                let payload = settings_payload(&state.settings.lock().clone());
+                let _ = window.emit("settings-changed", payload);
+            }
+        }
+        Err(err) => eprintln!("failed to open settings window: {err}"),
+    }
+}
+
+fn create_viewer_window(app: &AppHandle) -> Result<WebviewWindow, Error> {
+    let builder = tauri::WebviewWindowBuilder::new(
         app,
         next_window_label(app),
         WebviewUrl::App("index.html".into()),
     )
     .title("Float")
     .visible(true)
+    .focused(true)
     .resizable(true)
     .decorations(false)
-    .inner_size(400.0, 400.0)
-    .build()?;
+    .inner_size(400.0, 400.0);
 
-    apply_initial_window_state(app, &window, false);
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    let builder = builder.transparent(true);
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos"
+    )))]
+    let builder = builder;
+
+    let window = builder.build()?;
+    let label = window.label().to_string();
+
+    apply_initial_window_state(app, &window);
     wire_window_events(app, &window);
     if let Some(state) = app.try_state::<AppState>() {
+        state.selections.lock().remove(&label);
+        state.aspect_ratio.lock().remove(&label);
+        state.adjusting_resize.lock().remove(&label);
         state
             .last_focused_window
             .lock()
-            .replace(window.label().to_string());
+            .replace(label);
     }
-    Ok(())
+    let _ = window.set_focus();
+    Ok(window)
+}
+
+fn spawn_empty_window(app: &AppHandle) -> Result<(), Error> {
+    create_viewer_window(app).map(|_| ())
 }
 
 fn reset_cache(app: &AppHandle) -> Result<(), Error> {
@@ -262,8 +434,8 @@ fn reset_cache(app: &AppHandle) -> Result<(), Error> {
     Ok(())
 }
 
-fn focused_window(app: &AppHandle) -> Option<WebviewWindow> {
-    let mut focused: Option<WebviewWindow> = None;
+fn focused_any_window(app: &AppHandle) -> Option<WebviewWindow> {
+    let mut focused = None;
     for (_label, window) in app.webview_windows() {
         if let Ok(true) = window.is_focused() {
             focused = Some(window);
@@ -271,6 +443,28 @@ fn focused_window(app: &AppHandle) -> Option<WebviewWindow> {
         }
     }
     focused.or_else(|| app.get_webview_window("main"))
+}
+
+fn focused_viewer_window(app: &AppHandle) -> Option<WebviewWindow> {
+    if let Some(window) = focused_any_window(app).filter(|win| is_viewer_window_label(win.label())) {
+        return Some(window);
+    }
+
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Some(label) = state.last_focused_window.lock().clone() {
+            if let Some(window) = app.get_webview_window(&label) {
+                return Some(window);
+            }
+        }
+    }
+
+    for (label, window) in app.webview_windows() {
+        if is_viewer_window_label(&label) && matches!(window.is_focused(), Ok(true)) {
+            return Some(window);
+        }
+    }
+
+    app.get_webview_window("main")
 }
 
 fn active_file_for_window(app: &AppHandle, label: &str) -> Option<String> {
@@ -322,16 +516,13 @@ fn apply_active_file(
         }
     }
 
-    // Persist active file and window size
+    // Persist viewer size without treating the active file as shared settings state.
     if let Some(state) = app.try_state::<AppState>() {
-        let mut st = state.settings.lock().clone();
-        st.last_file = Some(path_str.clone());
-        let _ = save_state(app, window, st.clone());
-        *state.settings.lock() = st;
+        let st = state.settings.lock().clone();
+        let _ = save_state(app, Some(window), st);
     } else {
-        let mut st = load_state(app);
-        st.last_file = Some(path_str.clone());
-        let _ = save_state(app, window, st.clone());
+        let st = load_state(app);
+        let _ = save_state(app, Some(window), st);
     }
 
     emit_active_file(
@@ -395,21 +586,29 @@ fn apply_click_through_to_window(window: &WebviewWindow, enabled: bool) {
 }
 
 fn apply_click_through_to_all_windows(app: &AppHandle, enabled: bool) {
-    for (_, win) in app.webview_windows() {
+    for win in viewer_windows(app) {
         apply_click_through_to_window(&win, enabled);
     }
 }
 
-fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last_file: bool) {
+fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow) {
     let _ = window.set_always_on_top(true);
 
     let st = load_state(app);
     if let (Some(w), Some(h)) = (st.window_w, st.window_h) {
-        let logical_size = match st.window_size_units.unwrap_or(WindowSizeUnits::Physical) {
+        let logical_size = match st
+            .window_size_units
+            .clone()
+            .unwrap_or(WindowSizeUnits::Physical)
+        {
             WindowSizeUnits::Logical => Some((w, h)),
             WindowSizeUnits::Physical => {
                 if let Ok(scale_factor) = window.scale_factor() {
-                    let safe_scale = if scale_factor > 0.0 { scale_factor } else { 1.0 };
+                    let safe_scale = if scale_factor > 0.0 {
+                        scale_factor
+                    } else {
+                        1.0
+                    };
                     Some((w / safe_scale, h / safe_scale))
                 } else {
                     None
@@ -425,14 +624,7 @@ fn apply_initial_window_state(app: &AppHandle, window: &WebviewWindow, load_last
     }
 
     apply_click_through_to_window(window, st.click_through);
-
-    if load_last_file {
-        if let Some(p) = st.last_file.clone() {
-            if is_image_path(&p) && PathBuf::from(&p).exists() {
-                let _ = apply_selection(app, window, vec![p]);
-            }
-        }
-    }
+    apply_window_appearance(window, &st);
 }
 
 fn wire_window_events(app_handle: &AppHandle, window: &WebviewWindow) {
@@ -468,16 +660,29 @@ fn wire_window_events(app_handle: &AppHandle, window: &WebviewWindow) {
             }
         }
         WindowEvent::Focused(true) => {
-            if let Some(state) = app_for_event.try_state::<AppState>() {
-                *state.last_focused_window.lock() = Some(label.clone());
+            if is_viewer_window_label(&label) {
+                if let Some(state) = app_for_event.try_state::<AppState>() {
+                    *state.last_focused_window.lock() = Some(label.clone());
+                    if let Some(win) = app_for_event.get_webview_window(&label) {
+                        let st = state.settings.lock().clone();
+                        let _ = save_state(&app_for_event, Some(&win), st);
+                    }
+                }
             }
-            if let Some(win) = app_for_event.get_webview_window(&label) {
-                if let Some(path) = active_file_for_window(&app_for_event, &label) {
-                    if let Some(state) = app_for_event.try_state::<AppState>() {
-                        let mut st = state.settings.lock().clone();
-                        st.last_file = Some(path);
-                        let _ = save_state(&app_for_event, &win, st.clone());
-                        *state.settings.lock() = st;
+        }
+        WindowEvent::Destroyed => {
+            if is_viewer_window_label(&label) {
+                if let Some(state) = app_for_event.try_state::<AppState>() {
+                    if let Some(handle) = state.pending_save.lock().remove(&label) {
+                        handle.abort();
+                    }
+                    state.selections.lock().remove(&label);
+                    state.aspect_ratio.lock().remove(&label);
+                    state.adjusting_resize.lock().remove(&label);
+
+                    let mut last_focused = state.last_focused_window.lock();
+                    if last_focused.as_deref() == Some(label.as_str()) {
+                        last_focused.take();
                     }
                 }
             }
@@ -486,14 +691,30 @@ fn wire_window_events(app_handle: &AppHandle, window: &WebviewWindow) {
     });
 }
 
+fn viewer_window_for_label(app: &AppHandle, label: Option<&str>) -> Option<WebviewWindow> {
+    label
+        .and_then(|label| app.get_webview_window(label))
+        .filter(|window| is_viewer_window_label(window.label()))
+}
+
 #[tauri::command]
-async fn choose_file(app: AppHandle) -> Option<String> {
-    pick_and_apply_selection(app, SelectionTarget::CurrentWindow)
+async fn choose_file(app: AppHandle, window: WebviewWindow) -> Option<String> {
+    pick_and_apply_selection(app, Some(window.label().to_string()))
+}
+
+#[tauri::command]
+fn mark_active_viewer(app: AppHandle, window: WebviewWindow) {
+    if !is_viewer_window_label(window.label()) {
+        return;
+    }
+    if let Some(state) = app.try_state::<AppState>() {
+        *state.last_focused_window.lock() = Some(window.label().to_string());
+    }
 }
 
 #[tauri::command]
 fn previous_file(app: AppHandle) -> Option<String> {
-    if let Some(win) = focused_window(&app) {
+    if let Some(win) = focused_viewer_window(&app) {
         return navigate_selection(&app, &win, -1);
     }
     None
@@ -501,7 +722,7 @@ fn previous_file(app: AppHandle) -> Option<String> {
 
 #[tauri::command]
 fn next_file(app: AppHandle) -> Option<String> {
-    if let Some(win) = focused_window(&app) {
+    if let Some(win) = focused_viewer_window(&app) {
         return navigate_selection(&app, &win, 1);
     }
     None
@@ -536,15 +757,7 @@ fn load_image_data(path: String) -> Result<String, String> {
 #[tauri::command]
 fn fit_now(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     let path = active_file_for_window(&app, window.label())
-        .map(PathBuf::from)
-        .or_else(|| {
-            let st = if let Some(state) = app.try_state::<AppState>() {
-                state.settings.lock().clone()
-            } else {
-                load_state(&app)
-            };
-            st.last_file.map(PathBuf::from)
-        });
+        .map(PathBuf::from);
 
     let path = match path {
         Some(p) => p,
@@ -603,11 +816,11 @@ fn fit_now(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_settings(app: AppHandle) -> PersistedState {
+fn get_settings(app: AppHandle) -> SettingsPayload {
     if let Some(state) = app.try_state::<AppState>() {
-        state.settings.lock().clone()
+        settings_payload(&state.settings.lock().clone())
     } else {
-        load_state(&app)
+        settings_payload(&load_state(&app))
     }
 }
 
@@ -617,11 +830,13 @@ struct SettingsUpdate {
     click_through: Option<bool>,
     slideshow_enabled: Option<bool>,
     slideshow_interval_ms: Option<u64>,
+    opacity_percent: Option<u8>,
+    blur_enabled: Option<bool>,
 }
 
 #[tauri::command]
-fn set_settings(app: AppHandle, update: SettingsUpdate) -> Result<PersistedState, String> {
-    let win = focused_window(&app).ok_or("missing window")?;
+fn set_settings(app: AppHandle, update: SettingsUpdate) -> Result<SettingsPayload, String> {
+    let maybe_viewer = focused_viewer_window(&app);
     let mut st = if let Some(state) = app.try_state::<AppState>() {
         state.settings.lock().clone()
     } else {
@@ -655,16 +870,20 @@ fn set_settings(app: AppHandle, update: SettingsUpdate) -> Result<PersistedState
     if let Some(v) = update.slideshow_interval_ms {
         st.slideshow_interval_ms = v.clamp(1000, 60000);
     }
-    save_state(&app, &win, st.clone()).map_err(|e| e.to_string())?;
+    if let Some(v) = update.opacity_percent {
+        st.opacity_percent = v.clamp(35, 100);
+        apply_window_appearance_to_all_windows(&app, &st);
+    }
+    if let Some(v) = update.blur_enabled {
+        st.blur_enabled = v;
+        apply_window_appearance_to_all_windows(&app, &st);
+    }
+    save_state(&app, maybe_viewer.as_ref(), st.clone()).map_err(|e| e.to_string())?;
     if let Some(state) = app.try_state::<AppState>() {
         *state.settings.lock() = st.clone();
     }
-    Ok(st)
-}
-
-enum SelectionTarget {
-    CurrentWindow,
-    NewWindow,
+    emit_settings_changed(&app, &st);
+    Ok(settings_payload(&st))
 }
 
 fn pick_files(app: &AppHandle, parent: Option<&WebviewWindow>) -> Vec<String> {
@@ -702,43 +921,34 @@ fn pick_files(app: &AppHandle, parent: Option<&WebviewWindow>) -> Vec<String> {
     paths
 }
 
-fn pick_and_apply_selection(app: AppHandle, target: SelectionTarget) -> Option<String> {
+fn pick_and_apply_selection(app: AppHandle, target_label: Option<String>) -> Option<String> {
     // For automation, allow bypassing the native dialog with a predefined path.
     if let Ok(test_path) =
         std::env::var("FLOAT_TEST_PATH").or_else(|_| std::env::var("AOT_TEST_PATH"))
     {
         if !test_path.is_empty() {
-            match target {
-                SelectionTarget::CurrentWindow => {
-                    if let Some(win) = focused_window(&app) {
-                        return apply_selection(&app, &win, vec![test_path]);
-                    }
-                }
-                SelectionTarget::NewWindow => {
-                    return spawn_new_window_with_files(&app, vec![test_path]);
-                }
+            if let Some(win) = viewer_window_for_label(&app, target_label.as_deref())
+                .or_else(|| focused_viewer_window(&app))
+            {
+                return apply_selection(&app, &win, vec![test_path]);
             }
         } else {
             return None;
         }
     }
 
-    let focus = focused_window(&app);
+    let focus =
+        viewer_window_for_label(&app, target_label.as_deref()).or_else(|| focused_viewer_window(&app));
     let parent = focus.as_ref();
     let files = pick_files(&app, parent);
     if files.is_empty() {
         return None;
     }
 
-    match target {
-        SelectionTarget::CurrentWindow => {
-            if let Some(win) = focus.or_else(|| app.get_webview_window("main")) {
-                apply_selection(&app, &win, files)
-            } else {
-                None
-            }
-        }
-        SelectionTarget::NewWindow => spawn_new_window_with_files(&app, files),
+    if let Some(win) = focus.or_else(|| app.get_webview_window("main")) {
+        apply_selection(&app, &win, files)
+    } else {
+        None
     }
 }
 
@@ -758,32 +968,6 @@ fn next_window_label(app: &AppHandle) -> String {
     }
 }
 
-fn spawn_new_window_with_files(app: &AppHandle, files: Vec<String>) -> Option<String> {
-    if files.is_empty() {
-        return None;
-    }
-    let label = next_window_label(app);
-    let window =
-        tauri::WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
-            .title("Float")
-            .visible(true)
-            .resizable(true)
-            .decorations(false)
-            .inner_size(400.0, 400.0)
-            .build()
-            .ok()?;
-
-    apply_initial_window_state(app, &window, false);
-    wire_window_events(app, &window);
-    if let Some(state) = app.try_state::<AppState>() {
-        state
-            .last_focused_window
-            .lock()
-            .replace(window.label().to_string());
-    }
-    apply_selection(app, &window, files)
-}
-
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -794,7 +978,7 @@ fn main() {
             // Build native menu with platform shortcuts and toggles.
             let file_menu = SubmenuBuilder::new(&app_handle, "File")
                 .item(
-                    &MenuItemBuilder::with_id("new_window", "New Window…")
+                    &MenuItemBuilder::with_id("new_window", "New Window")
                         .accelerator(if cfg!(target_os = "macos") {
                             "Cmd+T"
                         } else {
@@ -817,6 +1001,15 @@ fn main() {
                             "Cmd+W"
                         } else {
                             "Ctrl+W"
+                        })
+                        .build(&app_handle)?,
+                )
+                .item(
+                    &MenuItemBuilder::with_id("open_settings", "Settings…")
+                        .accelerator(if cfg!(target_os = "macos") {
+                            "Cmd+,"
+                        } else {
+                            "Ctrl+,"
                         })
                         .build(&app_handle)?,
                 )
@@ -915,7 +1108,7 @@ fn main() {
             let win = app_handle
                 .get_webview_window("main")
                 .expect("main window exists");
-            apply_initial_window_state(&app_handle, &win, true);
+            apply_initial_window_state(&app_handle, &win);
             wire_window_events(&app_handle, &win);
 
             Ok(())
@@ -923,21 +1116,22 @@ fn main() {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open" => {
                 let handle = app.clone();
+                let target_label = focused_viewer_window(app).map(|window| window.label().to_string());
                 async_runtime::spawn(async move {
-                    let _ = choose_file(handle).await;
+                    let _ = pick_and_apply_selection(handle, target_label);
                 });
             }
             "new_window" => {
-                let handle = app.clone();
-                async_runtime::spawn(async move {
-                    let _ = pick_and_apply_selection(handle, SelectionTarget::NewWindow);
-                });
+                if let Err(err) = spawn_empty_window(app) {
+                    eprintln!("new window failed: {err}");
+                }
             }
             "close_window" => {
-                if let Some(win) = focused_window(app) {
+                if let Some(win) = focused_any_window(app) {
                     let _ = win.close();
                 }
             }
+            "open_settings" => open_settings_window(app),
             "reset_cache" => {
                 if let Err(err) = reset_cache(app) {
                     eprintln!("reset cache failed: {err}");
@@ -945,31 +1139,30 @@ fn main() {
             }
             "quit" => {
                 if let Some(state) = app.try_state::<AppState>() {
-                    if let Some(label) = state.last_focused_window.lock().clone() {
-                        if let Some(win) = app.get_webview_window(&label) {
-                            if let Some(path) = active_file_for_window(app, &label) {
-                                let mut st = state.settings.lock().clone();
-                                st.last_file = Some(path);
-                                let _ = save_state(app, &win, st.clone());
-                                *state.settings.lock() = st;
-                            }
-                        }
+                    if let Some(win) = state
+                        .last_focused_window
+                        .lock()
+                        .clone()
+                        .and_then(|label| app.get_webview_window(&label))
+                    {
+                        let st = state.settings.lock().clone();
+                        let _ = save_state(app, Some(&win), st);
                     }
                 }
                 app.exit(0);
             }
             "fit_now" => {
-                if let Some(win) = focused_window(app) {
+                if let Some(win) = focused_viewer_window(app) {
                     let _ = fit_now(app.clone(), win);
                 }
             }
             "previous_file" => {
-                if let Some(win) = focused_window(app) {
+                if let Some(win) = focused_viewer_window(app) {
                     let _ = navigate_selection(app, &win, -1);
                 }
             }
             "next_file" => {
-                if let Some(win) = focused_window(app) {
+                if let Some(win) = focused_viewer_window(app) {
                     let _ = navigate_selection(app, &win, 1);
                 }
             }
@@ -986,16 +1179,17 @@ fn main() {
                         !s.aspect_lock
                     };
                     s.aspect_lock = new_state;
-                    if let Some(win) = focused_window(app) {
-                        let _ = save_state(app, &win, s.clone());
-                    }
+                    let maybe_viewer = focused_viewer_window(app);
+                    let _ = save_state(app, maybe_viewer.as_ref(), s.clone());
                     *state.settings.lock() = s;
+                    emit_settings_changed(app, &state.settings.lock().clone());
                 }
             }
             "click_through_toggle" => {
                 if let Some(state) = app.try_state::<AppState>() {
                     let mut s = state.settings.lock().clone();
-                    let new_state = if let Some(toggle) = state.click_through_toggle.lock().clone() {
+                    let new_state = if let Some(toggle) = state.click_through_toggle.lock().clone()
+                    {
                         if let Ok(current) = toggle.is_checked() {
                             current
                         } else {
@@ -1006,10 +1200,10 @@ fn main() {
                     };
                     s.click_through = new_state;
                     apply_click_through_to_all_windows(app, new_state);
-                    if let Some(win) = focused_window(app) {
-                        let _ = save_state(app, &win, s.clone());
-                    }
+                    let maybe_viewer = focused_viewer_window(app);
+                    let _ = save_state(app, maybe_viewer.as_ref(), s.clone());
                     *state.settings.lock() = s;
+                    emit_settings_changed(app, &state.settings.lock().clone());
                 }
             }
             "slideshow_toggle" => {
@@ -1025,16 +1219,17 @@ fn main() {
                         !s.slideshow_enabled
                     };
                     s.slideshow_enabled = new_state;
-                    if let Some(win) = focused_window(app) {
-                        let _ = save_state(app, &win, s.clone());
-                    }
+                    let maybe_viewer = focused_viewer_window(app);
+                    let _ = save_state(app, maybe_viewer.as_ref(), s.clone());
                     *state.settings.lock() = s;
+                    emit_settings_changed(app, &state.settings.lock().clone());
                 }
             }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             choose_file,
+            mark_active_viewer,
             fit_now,
             get_settings,
             set_settings,

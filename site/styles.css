@@ -53,38 +53,45 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1.5rem;
-  padding: 1.1rem 0 1.35rem;
+  gap: 1rem;
+  padding: 0.7rem 0 0.8rem;
   position: sticky;
   top: 0;
   z-index: 20;
   backdrop-filter: blur(18px);
   background: linear-gradient(180deg, rgba(14, 16, 21, 0.92), rgba(14, 16, 21, 0.48));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.75rem;
+}
+
+.brand-copy {
+  display: grid;
+  gap: 0.14rem;
 }
 
 .brand-mark {
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 0.8rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);
 }
 
 .brand-name {
-  font-size: 1.4rem;
-  letter-spacing: 0.06em;
+  font-size: 1.28rem;
+  letter-spacing: 0.05em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .eyebrow,
@@ -96,12 +103,18 @@ a {
   font-size: 0.78rem;
 }
 
+.brand-copy .eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.1;
+}
+
 .site-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 0.85rem;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.92rem;
 }
 
 .site-nav a,
@@ -129,9 +142,9 @@ a {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
   gap: clamp(2.5rem, 4vw, 4.5rem);
-  align-items: center;
-  min-height: min(50rem, calc(100svh - 5.5rem));
-  padding: 2.4rem 0 2.8rem;
+  align-items: start;
+  min-height: min(46rem, calc(100svh - 4.8rem));
+  padding: 0.7rem 0 2.6rem;
 }
 
 .hero-copy,
@@ -146,7 +159,7 @@ a {
 
 .hero-copy {
   display: grid;
-  gap: 1.35rem;
+  gap: 1.05rem;
   animation-delay: 0.08s;
 }
 
@@ -171,13 +184,13 @@ a {
 
 .hero-intro {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.45rem;
 }
 
 .platform-ribbon {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .platform-pill {
@@ -329,7 +342,7 @@ a {
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.9rem;
+  gap: 0.75rem;
   margin: 0;
 }
 
@@ -357,6 +370,12 @@ a {
   border-color: transparent;
 }
 
+.header-cta {
+  min-height: 2.7rem;
+  padding: 0 1.05rem;
+  font-size: 0.94rem;
+}
+
 .button-secondary {
   background: rgba(255, 255, 255, 0.04);
 }
@@ -368,13 +387,14 @@ a {
 .hero-trust {
   margin: 0;
   color: rgba(242, 238, 232, 0.82);
-  font-size: 0.98rem;
+  font-size: 0.94rem;
   line-height: 1.5;
 }
 
 .hero-visual {
   position: relative;
   min-height: 30rem;
+  padding-top: 0.35rem;
 }
 
 .visual-plane {
@@ -449,7 +469,7 @@ a {
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   gap: 2rem;
-  padding: 2.7rem 0 2.1rem;
+  padding: 2.25rem 0 1.7rem;
 }
 
 .support-strip h2,
@@ -481,7 +501,7 @@ a {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
-  padding: 1rem 0 3.6rem;
+  padding: 0.8rem 0 3.1rem;
 }
 
 .feature-runway article {
@@ -507,7 +527,7 @@ a {
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: 2rem;
   align-items: start;
-  padding: 2.8rem 0 3.4rem;
+  padding: 2.35rem 0 3rem;
 }
 
 .gallery-grid {
@@ -535,7 +555,7 @@ a {
 }
 
 .release-panel {
-  padding: 2.8rem 0 0;
+  padding: 2.35rem 0 0;
 }
 
 .release-layout {
@@ -632,7 +652,7 @@ a {
 
   .site-header {
     position: static;
-    padding-bottom: 0.5rem;
+    padding-bottom: 0.65rem;
   }
 
   .header-actions {
@@ -642,7 +662,7 @@ a {
 
   .hero {
     min-height: auto;
-    padding-top: 1.5rem;
+    padding-top: 0.55rem;
   }
 
   .hero-visual {

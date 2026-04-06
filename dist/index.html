@@ -8,68 +8,740 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Float</title>
     <style>
-      html, body { height: 100%; margin: 0; font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; background: #111; color: #ccc; }
-      [data-tauri-drag-region] { -webkit-app-region: drag; }
-      .no-drag { -webkit-app-region: no-drag; }
-      #app { height: 100%; width: 100%; position: relative; }
-      .image-container { height: 100%; width: 100%; display: grid; place-items: center; background: #111; }
-      .image-container img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; user-select: none; -webkit-user-drag: none; }
-      .image-container.placeholder img { display: none; }
-      .image-container:not(.placeholder) img { display: block; }
-      .image-container:not(.placeholder) .placeholder-text { display: none; }
-      .placeholder-text { color: #888; font-size: 14px; text-align: center; padding: 12px; }
-      .hud { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; pointer-events: none; }
-      .hud .info { background: rgba(0,0,0,0.55); padding: 6px 10px; border-radius: 8px; font-size: 13px; color: #eee; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .controls { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; transition: opacity 0.2s ease; }
-      .btn { pointer-events: auto; background: rgba(255,255,255,0.08); color: #eee; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
-      .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      :root {
+        --viewer-opacity: 1;
+        --surface-0: rgba(10, 12, 16, 0.84);
+        --surface-1: rgba(20, 24, 30, 0.82);
+        --surface-2: rgba(34, 40, 48, 0.92);
+        --line-soft: rgba(255, 255, 255, 0.09);
+        --line-strong: rgba(255, 255, 255, 0.18);
+        --text-main: #edf2f7;
+        --text-muted: #9aa6b2;
+        --text-soft: #7d8994;
+        --accent: #cfd8ff;
+        --accent-strong: #f3f7ff;
+        --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.38);
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: transparent;
+        color: var(--text-main);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      [data-tauri-drag-region] {
+        -webkit-app-region: drag;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .no-drag {
+        -webkit-app-region: no-drag;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      #appRoot {
+        position: relative;
+        height: 100%;
+        width: 100%;
+      }
+
+      .viewer-frame {
+        position: relative;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at top, rgba(207, 216, 255, 0.12), transparent 34%),
+          linear-gradient(180deg, rgba(17, 21, 28, 0.9), rgba(8, 10, 14, 0.92));
+        border: 1px solid var(--line-soft);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+
+      .image-container {
+        height: 100%;
+        width: 100%;
+        display: grid;
+        place-items: center;
+      }
+
+      .image-container img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        display: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .image-container.placeholder img {
+        display: none;
+      }
+
+      .image-container:not(.placeholder) img {
+        display: block;
+      }
+
+      .image-container:not(.placeholder) .placeholder-card {
+        display: none;
+      }
+
+      .placeholder-card {
+        width: min(420px, calc(100% - 48px));
+        padding: 28px 24px;
+        border-radius: 20px;
+        background: linear-gradient(180deg, rgba(22, 27, 34, 0.88), rgba(12, 15, 20, 0.96));
+        border: 1px solid var(--line-soft);
+        box-shadow: var(--shadow-soft);
+        text-align: left;
+      }
+
+      .placeholder-card[data-state="missing"] {
+        background: linear-gradient(180deg, rgba(38, 30, 20, 0.92), rgba(18, 14, 10, 0.97));
+        border-color: rgba(255, 205, 138, 0.22);
+      }
+
+      .placeholder-card[data-state="error"] {
+        background: linear-gradient(180deg, rgba(40, 24, 26, 0.92), rgba(18, 11, 13, 0.97));
+        border-color: rgba(255, 162, 162, 0.24);
+      }
+
+      .placeholder-kicker {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .placeholder-title {
+        margin: 0 0 8px;
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+      }
+
+      .placeholder-text {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .placeholder-card[data-state="missing"] .placeholder-kicker {
+        color: #ffd38f;
+      }
+
+      .placeholder-card[data-state="error"] .placeholder-kicker {
+        color: #ffb0aa;
+      }
+
+      .placeholder-action {
+        margin: 14px 0 0;
+        color: var(--accent-strong);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .hud {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        pointer-events: none;
+      }
+
+      .hud-info {
+        min-width: 0;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(7, 9, 13, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+      }
+
+      .hud-label {
+        display: block;
+        color: var(--text-soft);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .hud-value {
+        display: block;
+        margin-top: 4px;
+        color: var(--text-main);
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .controls {
+        position: absolute;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+      }
+
+      .btn,
+      .select {
+        pointer-events: auto;
+        appearance: none;
+        background: rgba(16, 19, 24, 0.84);
+        color: var(--text-main);
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        padding: 9px 14px;
+        font-size: 13px;
+        line-height: 1;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+      }
+
+      .btn {
+        cursor: pointer;
+      }
+
+      .btn:disabled,
+      .select:disabled {
+        opacity: 0.42;
+        cursor: not-allowed;
+      }
+
       .hud,
-      .controls { opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
-      .chrome-visible .hud,
-      .chrome-visible .controls { opacity: 1; pointer-events: auto; }
-      .hud { pointer-events: none; }
+      .controls {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+
+      .viewer-frame.chrome-visible .hud,
+      .viewer-frame.chrome-visible .controls {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .hud {
+        pointer-events: none;
+      }
+
+      .settings-overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(4, 6, 8, 0.38);
+        backdrop-filter: blur(14px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease;
+      }
+
+      .settings-overlay.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .settings-panel {
+        width: min(560px, calc(100vw - 36px));
+        max-height: min(680px, calc(100vh - 36px));
+        overflow: auto;
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(18, 22, 29, 0.96), rgba(10, 12, 17, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        box-shadow: 0 28px 100px rgba(0, 0, 0, 0.5);
+      }
+
+      .settings-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 22px 22px 16px;
+      }
+
+      .settings-kicker {
+        display: block;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .settings-title {
+        margin: 8px 0 6px;
+        font-size: 28px;
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+      }
+
+      .settings-subtitle {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .ghost-btn {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--line-soft);
+        color: var(--text-main);
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .settings-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 0 22px 18px;
+      }
+
+      .settings-tab {
+        border: 1px solid var(--line-soft);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-muted);
+        border-radius: 999px;
+        padding: 9px 14px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .settings-tab.active {
+        background: rgba(240, 245, 255, 0.12);
+        color: var(--accent-strong);
+        border-color: rgba(240, 245, 255, 0.18);
+      }
+
+      .settings-body {
+        padding: 0 22px 22px;
+      }
+
+      .settings-view {
+        display: none;
+      }
+
+      .settings-view.active {
+        display: block;
+      }
+
+      .settings-section {
+        padding: 16px 0 18px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .settings-section:first-child {
+        border-top: 0;
+        padding-top: 2px;
+      }
+
+      .settings-section-title {
+        margin: 0 0 4px;
+        font-size: 16px;
+      }
+
+      .settings-section-copy {
+        margin: 0 0 14px;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .settings-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 18px;
+        padding: 14px 0;
+      }
+
+      .settings-row + .settings-row {
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .settings-meta {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .settings-label {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .settings-help {
+        margin: 6px 0 0;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .settings-control {
+        flex-shrink: 0;
+        min-width: 150px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .toggle {
+        width: 48px;
+        height: 28px;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .toggle input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .toggle-track {
+        width: 48px;
+        height: 28px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        transition: background 0.18s ease, border-color 0.18s ease;
+      }
+
+      .toggle-thumb {
+        position: absolute;
+        left: 4px;
+        top: 4px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: white;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        transition: transform 0.18s ease;
+      }
+
+      .toggle input:checked + .toggle-track {
+        background: rgba(207, 216, 255, 0.3);
+        border-color: rgba(207, 216, 255, 0.42);
+      }
+
+      .toggle input:checked ~ .toggle-thumb {
+        transform: translateX(20px);
+      }
+
+      .toggle input:disabled + .toggle-track,
+      .toggle input:disabled ~ .toggle-thumb {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .range-wrap {
+        min-width: 180px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .range-wrap input[type="range"] {
+        flex: 1;
+      }
+
+      .range-value {
+        width: 42px;
+        color: var(--accent-strong);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      .settings-select {
+        min-width: 120px;
+        padding: 9px 12px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--line-soft);
+        border-radius: 12px;
+        color: var(--text-main);
+      }
+
+      .settings-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .shortcut-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .shortcut-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .shortcut-row:first-child {
+        border-top: 0;
+      }
+
+      .shortcut-label {
+        color: var(--text-main);
+        font-size: 14px;
+      }
+
+      .shortcut-key {
+        padding: 7px 10px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--accent-strong);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+      }
     </style>
   </head>
   <body>
-    <div id="app" class="chrome-visible" data-tauri-drag-region>
-      <div class="hud">
-        <div class="info" id="fileInfo">No file selected</div>
-        <div class="info" id="status"></div>
+    <div id="appRoot">
+      <div id="viewerFrame" class="viewer-frame chrome-visible" data-tauri-drag-region>
+        <div class="hud">
+          <div class="hud-info">
+            <span class="hud-label">Active file</span>
+            <span class="hud-value" id="fileInfo">No file selected</span>
+          </div>
+          <div class="hud-info">
+            <span class="hud-label">Status</span>
+            <span class="hud-value" id="status">Idle</span>
+          </div>
+        </div>
+
+        <div id="imageContainer" class="image-container placeholder" data-tauri-drag-region>
+          <img id="image" alt="Selected file preview" draggable="false" data-tauri-drag-region />
+          <div id="placeholder" class="placeholder-card" data-state="idle" data-tauri-drag-region>
+            <span id="placeholderKicker" class="placeholder-kicker">Always on top</span>
+            <h1 id="placeholderTitle" class="placeholder-title">No image loaded</h1>
+            <p id="placeholderText" class="placeholder-text">Open an image and keep it visible above the rest of your desktop.</p>
+            <p id="placeholderAction" class="placeholder-action">Use ⌘+O to choose a file.</p>
+          </div>
+        </div>
+
+        <div id="controls" class="controls no-drag" hidden>
+          <button id="prevBtn" class="btn no-drag" type="button">Previous</button>
+          <button id="nextBtn" class="btn no-drag" type="button">Next</button>
+          <button id="slideshowBtn" class="btn no-drag" type="button">Slideshow: Off</button>
+        </div>
       </div>
-      <div id="imageContainer" class="image-container placeholder" data-tauri-drag-region>
-        <img id="image" alt="Selected file preview" draggable="false" data-tauri-drag-region />
-        <div id="placeholder" class="placeholder-text" data-tauri-drag-region>No file selected</div>
-      </div>
-      <div class="controls no-drag">
-        <button id="prevBtn" class="btn no-drag" type="button">Previous</button>
-        <button id="nextBtn" class="btn no-drag" type="button">Next</button>
-        <button id="slideshowBtn" class="btn no-drag" type="button">Slideshow: Off</button>
-        <select id="slideshowInterval" class="btn no-drag" aria-label="Slideshow interval">
-          <option value="2000">2s</option>
-          <option value="5000" selected>5s</option>
-          <option value="10000">10s</option>
-          <option value="15000">15s</option>
-        </select>
+
+      <div id="settingsOverlay" class="settings-overlay no-drag" aria-hidden="true">
+        <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+          <div class="settings-header">
+            <div>
+              <span class="settings-kicker">Preferences</span>
+              <h2 id="settingsTitle" class="settings-title">Settings</h2>
+              <p class="settings-subtitle">Small, durable controls for how Float behaves. Runtime actions still stay in the viewer.</p>
+            </div>
+            <button id="closeSettingsBtn" class="ghost-btn no-drag" type="button" aria-label="Close settings">Close</button>
+          </div>
+
+          <div class="settings-tabs">
+            <button class="settings-tab active no-drag" type="button" data-tab-target="general">General</button>
+            <button class="settings-tab no-drag" type="button" data-tab-target="shortcuts">Shortcuts</button>
+          </div>
+
+          <div class="settings-body">
+            <section id="settingsGeneral" class="settings-view active">
+              <div class="settings-section">
+                <h3 class="settings-section-title">Viewer behavior</h3>
+                <p class="settings-section-copy">These controls persist across launches and keep the viewer predictable when you reopen the app.</p>
+
+                <div class="settings-row">
+                  <div class="settings-meta">
+                    <p class="settings-label">Lock aspect ratio</p>
+                    <p class="settings-help">Keep manual window resizing constrained to the current image proportions.</p>
+                  </div>
+                  <div class="settings-control">
+                    <label class="toggle">
+                      <input id="settingsAspectLock" type="checkbox" />
+                      <span class="toggle-track"></span>
+                      <span class="toggle-thumb"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div class="settings-meta">
+                    <p class="settings-label">Click-through overlay</p>
+                    <p class="settings-help">Let the window stay visible without catching pointer input when you are using other apps underneath it.</p>
+                  </div>
+                  <div class="settings-control">
+                    <label class="toggle">
+                      <input id="settingsClickThrough" type="checkbox" />
+                      <span class="toggle-track"></span>
+                      <span class="toggle-thumb"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <h3 class="settings-section-title">Appearance</h3>
+                <p class="settings-section-copy">Keep the viewer legible, but soften how present it feels when it is floating above the rest of your screen.</p>
+
+                <div class="settings-row">
+                  <div class="settings-meta">
+                    <p class="settings-label">Window opacity</p>
+                    <p class="settings-help">Lower the viewer presence without making the image unreadable. Float keeps this within a safe visible range.</p>
+                  </div>
+                  <div class="settings-control">
+                    <div class="range-wrap">
+                      <input id="settingsOpacity" type="range" min="35" max="100" step="5" />
+                      <span id="settingsOpacityValue" class="range-value">100%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div class="settings-meta">
+                    <p class="settings-label">Native blur</p>
+                    <p class="settings-help">Uses the host compositor when available. Support can vary by platform and window manager.</p>
+                  </div>
+                  <div class="settings-control">
+                    <label class="toggle">
+                      <input id="settingsBlur" type="checkbox" />
+                      <span class="toggle-track"></span>
+                      <span class="toggle-thumb"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div class="settings-meta">
+                    <p class="settings-label">Slideshow interval</p>
+                    <p class="settings-help">The playback button in the viewer uses this interval whenever a session has more than one image.</p>
+                  </div>
+                  <div class="settings-control">
+                    <select id="settingsSlideshowInterval" class="settings-select no-drag" aria-label="Slideshow interval">
+                      <option value="2000">2 seconds</option>
+                      <option value="5000">5 seconds</option>
+                      <option value="10000">10 seconds</option>
+                      <option value="15000">15 seconds</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="settings-note" id="settingsBlurNote">Blur uses native window effects when the current platform supports them.</div>
+              </div>
+            </section>
+
+            <section id="settingsShortcuts" class="settings-view" aria-hidden="true">
+              <div class="settings-section">
+                <h3 class="settings-section-title">Shortcuts</h3>
+                <p class="settings-section-copy">Float keeps its main commands in the native menu. These are the active bindings for the current platform.</p>
+                <div id="shortcutList" class="shortcut-list"></div>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
     </div>
+
     <script>
       const tauri = window.__TAURI__ || {};
       const invoke = (cmd, args) => {
-        if (tauri?.core?.invoke) return tauri.core.invoke(cmd, args); // Tauri v2 global API
-        if (tauri.invoke) return tauri.invoke(cmd, args); // fallback for older globals
+        if (tauri?.core?.invoke) return tauri.core.invoke(cmd, args);
+        if (tauri.invoke) return tauri.invoke(cmd, args);
         return Promise.resolve();
       };
       const convertFileSrc = tauri?.core?.convertFileSrc || tauri.convertFileSrc;
+
+      const rootEl = document.getElementById('appRoot');
+      const viewerFrameEl = document.getElementById('viewerFrame');
       const imageContainer = document.getElementById('imageContainer');
       const imageEl = document.getElementById('image');
       const placeholderEl = document.getElementById('placeholder');
+      const placeholderKickerEl = document.getElementById('placeholderKicker');
+      const placeholderTitleEl = document.getElementById('placeholderTitle');
+      const placeholderTextEl = document.getElementById('placeholderText');
+      const placeholderActionEl = document.getElementById('placeholderAction');
       const fileInfoEl = document.getElementById('fileInfo');
       const statusEl = document.getElementById('status');
+      const controlsEl = document.getElementById('controls');
       const prevBtn = document.getElementById('prevBtn');
       const nextBtn = document.getElementById('nextBtn');
       const slideshowBtn = document.getElementById('slideshowBtn');
-      const slideshowIntervalEl = document.getElementById('slideshowInterval');
-      const appEl = document.getElementById('app');
+
+      const settingsOverlayEl = document.getElementById('settingsOverlay');
+      const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+      const settingsTabButtons = Array.from(document.querySelectorAll('.settings-tab'));
+      const settingsViews = {
+        general: document.getElementById('settingsGeneral'),
+        shortcuts: document.getElementById('settingsShortcuts'),
+      };
+      const shortcutListEl = document.getElementById('shortcutList');
+      const settingsAspectLockEl = document.getElementById('settingsAspectLock');
+      const settingsClickThroughEl = document.getElementById('settingsClickThrough');
+      const settingsOpacityEl = document.getElementById('settingsOpacity');
+      const settingsOpacityValueEl = document.getElementById('settingsOpacityValue');
+      const settingsBlurEl = document.getElementById('settingsBlur');
+      const settingsBlurNoteEl = document.getElementById('settingsBlurNote');
+      const settingsSlideshowIntervalEl = document.getElementById('settingsSlideshowInterval');
+
+      const isMacPlatform = () => {
+        const platform = navigator?.userAgentData?.platform || navigator?.platform || '';
+        return platform.toUpperCase().includes('MAC');
+      };
+
+      const isWindowsPlatform = () => {
+        const platform = navigator?.userAgentData?.platform || navigator?.platform || '';
+        return platform.toUpperCase().includes('WIN');
+      };
+
+      const settingsState = {
+        aspect_lock: false,
+        click_through: false,
+        slideshow_enabled: false,
+        slideshow_interval_ms: 5000,
+        opacity_percent: 100,
+        blur_enabled: false,
+      };
+
+      const platformCapabilities = {
+        blur: isMacPlatform() || isWindowsPlatform(),
+      };
 
       const slideshowState = {
         enabled: false,
@@ -77,28 +749,143 @@
         total: 0,
       };
       let slideshowTimer = null;
+      let hideChromeTimer = null;
 
-      const defaultPlaceholder = () => {
-        const platform =
-          navigator?.userAgentData?.platform ||
-          navigator?.platform ||
-          '';
-        const isMac = platform.toUpperCase().includes('MAC');
-        const shortcut = isMac ? '⌘+O' : 'Ctrl+O';
-        return `No file selected — press ${shortcut} to open`;
+      const shortcutRows = () => {
+        const mod = isMacPlatform() ? 'Cmd' : 'Ctrl';
+        const alt = isMacPlatform() ? '⌥+Cmd' : 'Ctrl';
+        return [
+          { label: 'Open Settings', combo: `${mod}+,` },
+          { label: 'Open File', combo: `${mod}+O` },
+          { label: 'New Window', combo: `${mod}+T` },
+          { label: 'Fit to Image Now', combo: `${mod}+F` },
+          { label: 'Previous File', combo: `${alt}+[` },
+          { label: 'Next File', combo: `${alt}+]` },
+          { label: 'Reset Cache', combo: `${mod}+Shift+Backspace` },
+        ];
       };
 
-      const showPlaceholder = (message = defaultPlaceholder()) => {
+      const renderShortcuts = () => {
+        shortcutListEl.replaceChildren();
+        shortcutRows().forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'shortcut-row';
+
+          const label = document.createElement('span');
+          label.className = 'shortcut-label';
+          label.textContent = item.label;
+
+          const key = document.createElement('span');
+          key.className = 'shortcut-key';
+          key.textContent = item.combo;
+
+          row.append(label, key);
+          shortcutListEl.append(row);
+        });
+      };
+
+      const syncSettingsControls = () => {
+        settingsAspectLockEl.checked = Boolean(settingsState.aspect_lock);
+        settingsClickThroughEl.checked = Boolean(settingsState.click_through);
+        settingsOpacityEl.value = String(settingsState.opacity_percent ?? 100);
+        settingsOpacityValueEl.textContent = `${settingsOpacityEl.value}%`;
+        settingsBlurEl.checked = Boolean(settingsState.blur_enabled);
+        settingsBlurEl.disabled = !platformCapabilities.blur;
+        settingsSlideshowIntervalEl.value = String(settingsState.slideshow_interval_ms ?? 5000);
+        settingsBlurNoteEl.textContent = platformCapabilities.blur
+          ? 'Blur uses native window effects when the current platform supports them.'
+          : 'Blur is not available on this platform, so Float keeps the window crisp.';
+      };
+
+      const applyAppearance = () => {
+        // Native opacity is applied by the Tauri shell. The viewer should not fake it with CSS.
+      };
+
+      const applySettingsState = (nextState = {}) => {
+        Object.assign(settingsState, nextState);
+        if (typeof nextState.blur_supported === 'boolean') {
+          platformCapabilities.blur = nextState.blur_supported;
+        }
+        slideshowState.intervalMs = Number(settingsState.slideshow_interval_ms) || 5000;
+        syncSettingsControls();
+        applyAppearance();
+        syncSlideshowUi();
+        startSlideshowIfNeeded();
+      };
+
+      const openFileShortcut = () => {
+        return isMacPlatform() ? '⌘+O' : 'Ctrl+O';
+      };
+
+      const setPlaceholderState = ({
+        tone = 'idle',
+        kicker,
+        title,
+        text,
+        action,
+        fileLabel = 'No file selected',
+        status = 'Ready',
+      }) => {
         imageContainer.classList.add('placeholder');
-        placeholderEl.textContent = message;
+        placeholderEl.dataset.state = tone;
+        placeholderKickerEl.textContent = kicker;
+        placeholderTitleEl.textContent = title;
+        placeholderTextEl.textContent = text;
+        placeholderActionEl.textContent = action;
         imageEl.src = '';
-        fileInfoEl.textContent = message;
-        statusEl.textContent = '';
+        fileInfoEl.textContent = fileLabel;
+        statusEl.textContent = status;
         prevBtn.disabled = true;
         nextBtn.disabled = true;
         slideshowState.total = 0;
+        syncControlsVisibility();
         syncSlideshowUi();
         stopSlideshow();
+      };
+
+      const showPlaceholder = () => {
+        setPlaceholderState({
+          tone: 'idle',
+          kicker: 'Always on top',
+          title: 'No image loaded',
+          text: 'Open an image and keep it visible above the rest of your desktop.',
+          action: `Use ${openFileShortcut()} to choose a file.`,
+          status: 'Idle',
+        });
+      };
+
+      const showMissingFileState = (path) => {
+        const fileName = path.split(/[\\/]/).pop() || path;
+        setPlaceholderState({
+          tone: 'missing',
+          kicker: 'File missing',
+          title: 'Image not found',
+          text: 'Float remembers your last image, but that file is no longer available at its previous location.',
+          action: `Use ${openFileShortcut()} to choose it again or pick a different image.`,
+          fileLabel: fileName,
+          status: 'Missing file',
+        });
+      };
+
+      const showLoadErrorState = (path) => {
+        const fileName = path.split(/[\\/]/).pop() || path;
+        setPlaceholderState({
+          tone: 'error',
+          kicker: 'Load failed',
+          title: 'Could not open image',
+          text: 'The file exists, but this build could not render it as an image.',
+          action: `Try reopening it, or use ${openFileShortcut()} to choose a different file.`,
+          fileLabel: fileName,
+          status: 'Load failed',
+        });
+      };
+
+      const syncControlsVisibility = () => {
+        const showNav = slideshowState.total > 1;
+        controlsEl.hidden = !showNav;
+        prevBtn.hidden = !showNav;
+        nextBtn.hidden = !showNav;
+        slideshowBtn.hidden = !showNav;
       };
 
       const stopSlideshow = () => {
@@ -109,12 +896,10 @@
       };
 
       const syncSlideshowUi = () => {
-        if (!slideshowBtn || !slideshowIntervalEl) return;
         slideshowBtn.textContent = `Slideshow: ${slideshowState.enabled ? 'On' : 'Off'}`;
-        slideshowIntervalEl.value = String(slideshowState.intervalMs);
         const disabled = slideshowState.total <= 1;
         slideshowBtn.disabled = disabled;
-        slideshowIntervalEl.disabled = disabled;
+        syncControlsVisibility();
       };
 
       const startSlideshowIfNeeded = () => {
@@ -126,14 +911,6 @@
         }, interval);
       };
 
-      const persistSettings = async (update) => {
-        try {
-          await invoke('set_settings', { update });
-        } catch (err) {
-          console.warn('Failed to persist settings', err);
-        }
-      };
-
       const buildSources = (path) => {
         const sources = [];
         if (!path) return sources;
@@ -141,7 +918,7 @@
           try {
             sources.push(convertFileSrc(path));
           } catch (_) {
-            // Ignore and continue to file:// fallback
+            // ignore
           }
         }
         const encodedPath = encodeURI(path.startsWith('/') ? path : `/${path}`);
@@ -159,7 +936,6 @@
           imageEl.onload = () => {
             cleanup();
             imageContainer.classList.remove('placeholder');
-            placeholderEl.textContent = '';
             resolve(true);
           };
           imageEl.onerror = () => {
@@ -180,82 +956,127 @@
           const ok = await trySource(sources[i]);
           if (ok) return;
         }
+        let fallbackError = '';
         try {
           const dataUrl = await invoke('load_image_data', { path });
           const ok = await trySource(dataUrl);
           if (ok) return;
         } catch (err) {
+          fallbackError = String(err);
           console.warn('Image fallback failed', err);
         }
-        showPlaceholder('Image unavailable');
+        if (fallbackError.includes('file does not exist')) {
+          showMissingFileState(path);
+          return;
+        }
+        showLoadErrorState(path);
       };
 
       const renderState = (payload) => {
         const path = payload?.path;
         const index = payload?.index ?? null;
         const total = payload?.total ?? null;
+
         if (!path) {
           showPlaceholder();
           return;
         }
+
         const fileName = path.split(/[\\/]/).pop() || path;
         fileInfoEl.textContent = fileName;
-        if (typeof index === 'number' && typeof total === 'number' && total > 0) {
+        slideshowState.total = typeof total === 'number' && total > 0 ? total : 1;
+
+        if (typeof index === 'number' && typeof total === 'number' && total > 1) {
           statusEl.textContent = `File ${index + 1} of ${total}`;
           prevBtn.disabled = index <= 0;
           nextBtn.disabled = index >= total - 1;
-          slideshowState.total = total;
         } else {
-          statusEl.textContent = '';
-          prevBtn.disabled = false;
-          nextBtn.disabled = false;
-          slideshowState.total = 0;
+          statusEl.textContent = 'Single image';
+          prevBtn.disabled = true;
+          nextBtn.disabled = true;
         }
+
+        syncControlsVisibility();
         syncSlideshowUi();
         startSlideshowIfNeeded();
         showImage(path);
       };
 
-      let hideChromeTimer = null;
       const showChrome = () => {
-        appEl?.classList.add('chrome-visible');
+        viewerFrameEl.classList.add('chrome-visible');
         if (hideChromeTimer) {
           clearTimeout(hideChromeTimer);
         }
         hideChromeTimer = setTimeout(() => {
-          appEl?.classList.remove('chrome-visible');
-        }, 2000);
+          if (settingsOverlayEl.classList.contains('open')) return;
+          viewerFrameEl.classList.remove('chrome-visible');
+        }, 1600);
       };
 
       const attachChromeHandlers = () => {
-        ['mousemove', 'mousedown', 'keydown'].forEach((evt) => {
-          window.addEventListener(evt, showChrome, { passive: true });
+        ['mousemove', 'mousedown', 'keydown'].forEach((eventName) => {
+          window.addEventListener(eventName, showChrome, { passive: true });
         });
         showChrome();
       };
 
-      const bootstrap = async () => {
+      const markActiveViewer = async () => {
         try {
-          const settings = await invoke('get_settings');
-          if (typeof settings?.slideshow_enabled === 'boolean') {
-            slideshowState.enabled = settings.slideshow_enabled;
-          }
-          if (typeof settings?.slideshow_interval_ms === 'number') {
-            slideshowState.intervalMs = settings.slideshow_interval_ms;
-          }
-          syncSlideshowUi();
-          if (settings?.last_file) {
-            renderState({ path: settings.last_file });
-            return;
-          }
-        } catch (err) {
-          console.warn('Failed to load settings', err);
+          await invoke('mark_active_viewer');
+        } catch (_) {
+          // Best-effort tracking for app-menu actions on multi-window macOS flows.
         }
-        showPlaceholder();
       };
 
-      bootstrap();
-      attachChromeHandlers();
+      const persistSettings = async (update) => {
+        try {
+          const nextState = await invoke('set_settings', { update });
+          applySettingsState(nextState || update);
+        } catch (err) {
+          console.warn('Failed to persist settings', err);
+        }
+      };
+
+      const loadSettings = async () => {
+        try {
+          const settings = await invoke('get_settings');
+          applySettingsState(settings || {});
+          return settings;
+        } catch (err) {
+          console.warn('Failed to load settings', err);
+          return null;
+        }
+      };
+
+      const openSettings = async () => {
+        await loadSettings();
+        settingsOverlayEl.classList.add('open');
+        settingsOverlayEl.setAttribute('aria-hidden', 'false');
+        showChrome();
+      };
+
+      const closeSettings = () => {
+        settingsOverlayEl.classList.remove('open');
+        settingsOverlayEl.setAttribute('aria-hidden', 'true');
+        showChrome();
+      };
+
+      const activateSettingsTab = (name) => {
+        settingsTabButtons.forEach((button) => {
+          button.classList.toggle('active', button.dataset.tabTarget === name);
+        });
+        Object.entries(settingsViews).forEach(([viewName, element]) => {
+          const active = viewName === name;
+          element.classList.toggle('active', active);
+          element.setAttribute('aria-hidden', String(!active));
+        });
+      };
+
+      const bootstrap = async () => {
+        renderShortcuts();
+        await loadSettings();
+        showPlaceholder();
+      };
 
       const registerListeners = () => {
         if (tauri?.event?.listen) {
@@ -264,45 +1085,103 @@
               renderState(event?.payload);
             })
             .catch((err) => console.warn('Failed to register active-file listener', err));
+
           tauri.event
             .listen('file-selected', async (event) => {
-              // Backward compatibility fallback
               const payload = event?.payload;
               if (payload?.path || typeof payload === 'string') {
                 renderState({ path: payload.path || payload });
               }
             })
             .catch((err) => console.warn('Failed to register file-selected listener', err));
+
+          tauri.event
+            .listen('open-settings', async () => {
+              await openSettings();
+            })
+            .catch((err) => console.warn('Failed to register open-settings listener', err));
+
+          tauri.event
+            .listen('settings-changed', async (event) => {
+              applySettingsState(event?.payload || {});
+            })
+            .catch((err) => console.warn('Failed to register settings-changed listener', err));
         } else {
           console.warn('Tauri event API unavailable; UI will not live-update on selection.');
         }
       };
 
+      bootstrap();
+      attachChromeHandlers();
       registerListeners();
+      markActiveViewer();
+
+      window.addEventListener('mousedown', () => {
+        markActiveViewer();
+      }, { capture: true, passive: true });
 
       prevBtn.addEventListener('click', () => {
         showChrome();
         invoke('previous_file');
       });
+
       nextBtn.addEventListener('click', () => {
         showChrome();
         invoke('next_file');
       });
-      slideshowBtn?.addEventListener('click', async () => {
+
+      slideshowBtn.addEventListener('click', async () => {
         showChrome();
         slideshowState.enabled = !slideshowState.enabled;
         syncSlideshowUi();
         startSlideshowIfNeeded();
         await persistSettings({ slideshow_enabled: slideshowState.enabled });
       });
-      slideshowIntervalEl?.addEventListener('change', async () => {
-        showChrome();
-        const next = Number(slideshowIntervalEl.value);
-        if (!Number.isFinite(next) || next < 1000) return;
-        slideshowState.intervalMs = next;
-        syncSlideshowUi();
-        startSlideshowIfNeeded();
-        await persistSettings({ slideshow_interval_ms: next });
+
+      settingsAspectLockEl.addEventListener('change', async () => {
+        await persistSettings({ aspect_lock: settingsAspectLockEl.checked });
+      });
+
+      settingsClickThroughEl.addEventListener('change', async () => {
+        await persistSettings({ click_through: settingsClickThroughEl.checked });
+      });
+
+      settingsOpacityEl.addEventListener('input', () => {
+        settingsState.opacity_percent = Number(settingsOpacityEl.value);
+        settingsOpacityValueEl.textContent = `${settingsOpacityEl.value}%`;
+        applyAppearance();
+      });
+
+      settingsOpacityEl.addEventListener('change', async () => {
+        await persistSettings({ opacity_percent: Number(settingsOpacityEl.value) });
+      });
+
+      settingsBlurEl.addEventListener('change', async () => {
+        await persistSettings({ blur_enabled: settingsBlurEl.checked });
+      });
+
+      settingsSlideshowIntervalEl.addEventListener('change', async () => {
+        await persistSettings({ slideshow_interval_ms: Number(settingsSlideshowIntervalEl.value) });
+      });
+
+      settingsTabButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          activateSettingsTab(button.dataset.tabTarget);
+        });
+      });
+
+      closeSettingsBtn.addEventListener('click', closeSettings);
+
+      settingsOverlayEl.addEventListener('click', (event) => {
+        if (event.target === settingsOverlayEl) {
+          closeSettings();
+        }
+      });
+
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && settingsOverlayEl.classList.contains('open')) {
+          closeSettings();
+        }
       });
     </script>
   </body>

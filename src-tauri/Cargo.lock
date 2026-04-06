@@ -884,6 +884,7 @@ dependencies = [
  "base64 0.21.7",
  "directories",
  "image",
+ "objc2-app-kit",
  "parking_lot",
  "serde",
  "serde_json",
@@ -892,6 +893,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "thiserror 1.0.69",
  "tokio",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
