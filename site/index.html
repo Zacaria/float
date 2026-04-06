@@ -21,108 +21,104 @@
             <a class="brand-name" href="https://github.com/Zacaria/float">Float</a>
           </div>
         </div>
-        <nav class="site-nav" aria-label="Primary">
-          <a href="#workflow">Workflow</a>
-          <a href="#details">Details</a>
-          <a href="https://github.com/Zacaria/float/releases">Releases</a>
-        </nav>
+        <div class="header-actions">
+          <nav class="site-nav" aria-label="Primary">
+            <a href="#workflow">Workflow</a>
+            <a href="#details">Details</a>
+            <a href="https://github.com/Zacaria/float/releases">Releases</a>
+          </nav>
+          <a class="button button-primary header-cta" href="#download">Download</a>
+        </div>
       </header>
 
       <main>
-        <section class="hero">
+        <section class="hero" id="download">
           <div class="hero-copy">
-            <p class="hero-kicker">Always on top, without the ceremony</p>
-            <h1>Keep the image you need hovering over the work that matters.</h1>
+            <div class="hero-intro">
+              <p class="hero-kicker">Available now for macOS and Windows</p>
+              <div class="platform-ribbon" role="list" aria-label="Supported platforms">
+                <span class="platform-pill platform-pill-macos">macOS signed + notarized</span>
+                <span class="platform-pill platform-pill-windows">Windows x64 installer</span>
+              </div>
+            </div>
+            <h1>Keep screenshots, mockups, and cheat sheets pinned above your work.</h1>
             <p class="hero-body">
-              Float is a compact viewer for cheat sheets, mockups, diagrams, and reference images.
-              Open a file, fit it instantly, and keep it pinned above your editor, browser, or
-              design tools on macOS or Windows.
+              Float is a lightweight native viewer that opens fast, fits the image instantly, and
+              stays above your editor, browser, or design tools without adding another workspace to
+              manage.
             </p>
+            <p class="hero-download-label">Choose your platform</p>
             <div class="hero-downloads" role="group" aria-label="Download Float">
               <a
                 class="download-tile download-macos"
                 href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg"
               >
                 <span class="download-platform">macOS</span>
-                <strong>Download DMG</strong>
-                <span class="download-note">Universal build for Apple Silicon and Intel</span>
+                <strong>Latest macOS build</strong>
+                <span class="download-note">Signed and notarized universal DMG for Apple Silicon and Intel</span>
+                <span class="download-cta">Download DMG</span>
               </a>
               <a
                 class="download-tile download-windows"
                 href="https://github.com/Zacaria/float/releases/latest/download/Float-windows-x64-setup.exe"
               >
                 <span class="download-platform">Windows</span>
-                <strong>Download Setup</strong>
-                <span class="download-note">NSIS installer for x64 desktops</span>
+                <strong>Latest Windows build</strong>
+                <span class="download-note">Direct NSIS installer for x64 desktops</span>
+                <span class="download-cta">Download setup</span>
               </a>
             </div>
             <div class="hero-actions">
-              <a
-                class="button button-secondary"
-                href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256"
-                >macOS checksum</a
-              >
-              <a class="button button-ghost" href="https://github.com/Zacaria/float/releases/latest"
+              <a class="button button-secondary" href="https://github.com/Zacaria/float/releases/latest"
                 >All release assets</a
               >
             </div>
-            <ul class="hero-meta">
-              <li>macOS build is Developer ID signed and notarized</li>
-              <li>Windows ships as a direct x64 installer on every tagged release</li>
-              <li>Distributed directly through GitHub Releases</li>
-            </ul>
+            <p class="hero-trust">
+              Native app. No account. Downloaded directly from GitHub Releases.
+            </p>
           </div>
 
           <div class="hero-visual" aria-hidden="true">
             <div class="visual-plane visual-plane-back"></div>
-            <figure class="shot shot-large">
+            <figure class="shot shot-main">
               <img src="./assets/figma_shortcuts_cheatsheet.png" alt="" />
             </figure>
-            <figure class="shot shot-small shot-left">
-              <img src="./assets/combos_cheatsheet.png" alt="" />
-            </figure>
-            <figure class="shot shot-small shot-right">
-              <img src="./assets/lol_wave_management.png" alt="" />
-            </figure>
+            <div class="visual-badge visual-badge-top">Always on top</div>
+            <div class="visual-badge visual-badge-bottom">Open. Fit. Keep working.</div>
           </div>
         </section>
 
         <section class="support-strip" id="workflow">
           <div>
-            <p class="eyebrow">Built for real reference work</p>
-            <h2>One job, done fast.</h2>
+            <p class="eyebrow">Built for</p>
+            <h2>People who work with visual references all day.</h2>
           </div>
-          <div class="support-copy">
-            <p>
-              Float opens local images with native file pickers, keeps the window above the rest of
-              your desktop, and stays out of the way when you just need a visual anchor nearby.
-            </p>
+          <div class="support-copy support-audience">
+            <span>Developers</span>
+            <span>Designers</span>
+            <span>Editors</span>
+            <span>Researchers</span>
+            <span>Anyone working from screenshots, mockups, or diagrams</span>
           </div>
         </section>
 
         <section class="feature-runway">
           <article>
-            <p class="eyebrow">Reference-first</p>
-            <h3>Pin shortcut sheets, diagrams, or screenshots over active work.</h3>
+            <p class="eyebrow">Reference-first workflow</p>
+            <h3>Keep the image in view without babysitting the window.</h3>
             <p>
-              Keep a single image visible while coding, designing, editing, or reviewing. Float
-              removes everything that slows down that loop.
+              Float stays above the rest of your desktop, opens local files with native pickers,
+              and gets out of the way when you need one image visible while the real work happens
+              underneath.
             </p>
           </article>
           <article>
             <p class="eyebrow">Native controls</p>
-            <h3>Open files quickly, fit the frame, and move through a selected image set.</h3>
+            <h3>Open fast, fit instantly, and move through image sets with minimal friction.</h3>
             <p>
-              Multi-file navigation, slideshow mode, aspect lock, and window persistence are built
-              into the current release without adding app chrome everywhere.
-            </p>
-          </article>
-          <article>
-            <p class="eyebrow">Trusted download</p>
-            <h3>Choose the platform build you need without digging through CI output.</h3>
-            <p>
-              Public downloads come from GitHub Releases with stable asset names, a checksum for
-              the macOS DMG, and separate installers for macOS and Windows.
+              Multi-file navigation, slideshow mode, aspect lock, window persistence, and stable
+              release assets are already in the app, without turning Float into a cluttered control
+              panel.
             </p>
           </article>
         </section>
@@ -152,16 +148,32 @@
         <section class="release-panel">
           <div>
             <p class="eyebrow">Release details</p>
-            <h2>Pick the build that matches your machine and install in a minute.</h2>
+            <h2>Pick the right build, install in a minute, and get back to work.</h2>
           </div>
-          <ol class="install-steps">
-            <li>Download the latest macOS DMG or Windows setup file.</li>
-            <li>On macOS, drag Float into Applications. On Windows, run the installer.</li>
-            <li>Launch Float, press <span>⌘O</span> or <span>Ctrl+O</span>, and open your first image.</li>
-          </ol>
-          <div class="release-links">
-            <a href="https://github.com/Zacaria/float/releases/latest">Latest release notes</a>
-            <a href="https://github.com/Zacaria/float">Source on GitHub</a>
+          <div class="release-layout">
+            <div class="release-card">
+              <p class="release-card-label">Direct download</p>
+              <ul class="release-facts">
+                <li>macOS: signed, notarized universal DMG</li>
+                <li>Windows: direct x64 installer</li>
+                <li>Distribution: GitHub Releases with stable asset names</li>
+              </ul>
+            </div>
+            <div class="release-install">
+              <ol class="install-steps">
+                <li>Download the latest macOS DMG or Windows setup file.</li>
+                <li>On macOS, drag Float into Applications. On Windows, run the installer.</li>
+                <li>Launch Float, press <span>⌘O</span> or <span>Ctrl+O</span>, and open your first image.</li>
+              </ol>
+              <div class="release-links">
+                <a href="https://github.com/Zacaria/float/releases/latest">Latest release notes</a>
+                <a href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256"
+                  >macOS checksum</a
+                >
+                <a href="https://github.com/Zacaria/float/releases">All release assets</a>
+                <a href="https://github.com/Zacaria/float">Source on GitHub</a>
+              </div>
+            </div>
           </div>
         </section>
       </main>

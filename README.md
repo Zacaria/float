@@ -78,8 +78,9 @@ The landing page lives in `site/` and links to:
 
 - `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg`
 - `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256`
+- `https://github.com/Zacaria/float/releases/latest/download/Float-windows-x64-setup.exe`
 
-The landing page remains macOS-only for now. Windows users should download the installer directly from the GitHub Release page.
+The landing page highlights both supported public downloads: the notarized macOS DMG and the Windows x64 installer.
 
 ### CI release flow
 
