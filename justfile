@@ -44,6 +44,21 @@ tauri-open:
 	APP_TAURI="src-tauri/target/release/bundle/macos/Float.app"
 	if [ -d "$APP_TAURI" ]; then open "$APP_TAURI"; else echo "App not found: $APP_TAURI" >&2; exit 1; fi
 
+# Launch Tauri dev with a deterministic image path, then verify Cmd+T + Cmd+O loads into the new window.
+# macOS only. Requires Accessibility permission for the terminal/Codex app.
+tauri-check-open-target image:
+	set -euo pipefail; \
+	if [ "$(uname -s)" != "Darwin" ]; then echo "tauri-check-open-target is macOS-only" >&2; exit 1; fi; \
+	ABS_IMAGE="$(cd "$(dirname "{{image}}")" && pwd)/$(basename "{{image}}")"; \
+	if [ ! -f "$ABS_IMAGE" ]; then echo "Image not found: $ABS_IMAGE" >&2; exit 1; fi; \
+	pkill -x float-tauri >/dev/null 2>&1 || true; \
+	pkill -x Float >/dev/null 2>&1 || true; \
+	LOG_FILE="$(mktemp -t float-open-target.XXXXXX.log)"; \
+	APP_NAME=float-tauri FLOAT_TEST_PATH="$ABS_IMAGE" RUST_BACKTRACE=1 cargo tauri dev >"$LOG_FILE" 2>&1 & \
+	DEV_PID=$!; \
+	trap 'kill "$DEV_PID" >/dev/null 2>&1 || true; pkill -x float-tauri >/dev/null 2>&1 || true; pkill -x Float >/dev/null 2>&1 || true; echo "Tauri dev log: $LOG_FILE"' EXIT; \
+	scripts/macos-open-target-check.sh "$ABS_IMAGE"
+
 # Run release-plz to bump versions, create tag, and push branch+tags
 # Requires clean working tree and access to origin remote.
 release-bump:

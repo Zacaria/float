@@ -748,6 +748,7 @@
         intervalMs: 5000,
         total: 0,
       };
+      let currentWindowLabel = null;
       let slideshowTimer = null;
       let hideChromeTimer = null;
 
@@ -1048,6 +1049,16 @@
         }
       };
 
+      const loadWindowLabel = async () => {
+        try {
+          currentWindowLabel = await invoke('current_window_label');
+          return currentWindowLabel;
+        } catch (err) {
+          console.warn('Failed to resolve window label', err);
+          return null;
+        }
+      };
+
       const openSettings = async () => {
         await loadSettings();
         settingsOverlayEl.classList.add('open');
@@ -1078,16 +1089,22 @@
         showPlaceholder();
       };
 
-      const registerListeners = () => {
+      const registerListeners = async () => {
         if (tauri?.event?.listen) {
+          const windowLabel = currentWindowLabel || await loadWindowLabel();
+          if (!windowLabel) {
+            console.warn('Window label unavailable; file-selection events will not be isolated.');
+            return;
+          }
+
           tauri.event
-            .listen('active-file-changed', async (event) => {
+            .listen(`active-file-changed:${windowLabel}`, async (event) => {
               renderState(event?.payload);
             })
             .catch((err) => console.warn('Failed to register active-file listener', err));
 
           tauri.event
-            .listen('file-selected', async (event) => {
+            .listen(`file-selected:${windowLabel}`, async (event) => {
               const payload = event?.payload;
               if (payload?.path || typeof payload === 'string') {
                 renderState({ path: payload.path || payload });

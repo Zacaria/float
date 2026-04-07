@@ -13,6 +13,9 @@ test('bootstrap shows the default placeholder with mocked tauri settings', async
       core: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         invoke: (cmd: string, _args: any = {}) => {
+          if (cmd === 'current_window_label') {
+            return Promise.resolve('main');
+          }
           if (cmd === 'get_settings') {
             return Promise.resolve({
               aspect_lock: false,
@@ -69,6 +72,9 @@ test('active-file-changed renders the selected image with mocked tauri', async (
       core: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         invoke: (cmd: string, _args: any = {}) => {
+          if (cmd === 'current_window_label') {
+            return Promise.resolve('main');
+          }
           if (cmd === 'get_settings') {
             return Promise.resolve({
               aspect_lock: false,
@@ -108,7 +114,7 @@ test('active-file-changed renders the selected image with mocked tauri', async (
   await page.goto(`file://${distPath}`);
   await page.evaluate((mockPath) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__dispatchTauri('active-file-changed', { path: mockPath, index: 0, total: 1 });
+    (window as any).__dispatchTauri('active-file-changed:main', { path: mockPath, index: 0, total: 1 });
   }, mockPath);
 
   await expect(page.locator('#fileInfo')).toHaveText('icon.png');
@@ -129,6 +135,9 @@ test('active-file-changed renders a missing-file state when the image is gone', 
       core: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         invoke: (cmd: string, _args: any = {}) => {
+          if (cmd === 'current_window_label') {
+            return Promise.resolve('main');
+          }
           if (cmd === 'get_settings') {
             return Promise.resolve({
               aspect_lock: false,
@@ -165,7 +174,7 @@ test('active-file-changed renders a missing-file state when the image is gone', 
   await page.goto(`file://${distPath}`);
   await page.evaluate((missingPath) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__dispatchTauri('active-file-changed', { path: missingPath, index: 0, total: 1 });
+    (window as any).__dispatchTauri('active-file-changed:main', { path: missingPath, index: 0, total: 1 });
   }, missingPath);
 
   await expect(page.locator('#imageContainer')).toHaveClass(/placeholder/);
@@ -187,6 +196,9 @@ test('active-file-changed renders a load-failed state when the image payload is 
       core: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         invoke: (cmd: string, _args: any = {}) => {
+          if (cmd === 'current_window_label') {
+            return Promise.resolve('main');
+          }
           if (cmd === 'get_settings') {
             return Promise.resolve({
               aspect_lock: false,
@@ -223,7 +235,7 @@ test('active-file-changed renders a load-failed state when the image payload is 
   await page.goto(`file://${distPath}`);
   await page.evaluate((brokenPath) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__dispatchTauri('active-file-changed', { path: brokenPath, index: 0, total: 1 });
+    (window as any).__dispatchTauri('active-file-changed:main', { path: brokenPath, index: 0, total: 1 });
   }, brokenPath);
 
   await expect(page.locator('#imageContainer')).toHaveClass(/placeholder/);

@@ -22,6 +22,9 @@ test('opens settings and persists updated preferences with mocked tauri', async 
       core: {
         invoke: (cmd: string, args: any = {}) => {
           invocations.push({ cmd, args });
+          if (cmd === 'current_window_label') {
+            return Promise.resolve('settings');
+          }
           if (cmd === 'get_settings') {
             return Promise.resolve(currentSettings);
           }

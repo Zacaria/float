@@ -477,11 +477,20 @@ fn active_file_for_window(app: &AppHandle, label: &str) -> Option<String> {
     None
 }
 
+fn active_file_event_name(label: &str) -> String {
+    format!("active-file-changed:{label}")
+}
+
+fn file_selected_event_name(label: &str) -> String {
+    format!("file-selected:{label}")
+}
+
 fn emit_active_file(window: &WebviewWindow, payload: ActiveFilePayload) {
-    let _ = window.emit("active-file-changed", payload.clone());
-    // Backward compatibility with the previous event name
+    let active_event = active_file_event_name(window.label());
+    let file_selected_event = file_selected_event_name(window.label());
+    let _ = window.emit(&active_event, payload.clone());
     let _ = window.emit(
-        "file-selected",
+        &file_selected_event,
         ActiveFilePayload {
             path: payload.path.clone(),
             index: None,
@@ -700,6 +709,11 @@ fn viewer_window_for_label(app: &AppHandle, label: Option<&str>) -> Option<Webvi
 #[tauri::command]
 async fn choose_file(app: AppHandle, window: WebviewWindow) -> Option<String> {
     pick_and_apply_selection(app, Some(window.label().to_string()))
+}
+
+#[tauri::command]
+fn current_window_label(window: WebviewWindow) -> String {
+    window.label().to_string()
 }
 
 #[tauri::command]
@@ -1229,6 +1243,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             choose_file,
+            current_window_label,
             mark_active_viewer,
             fit_now,
             get_settings,
