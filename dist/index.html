@@ -807,6 +807,7 @@
         if (typeof nextState.blur_supported === 'boolean') {
           platformCapabilities.blur = nextState.blur_supported;
         }
+        slideshowState.enabled = Boolean(settingsState.slideshow_enabled);
         slideshowState.intervalMs = Number(settingsState.slideshow_interval_ms) || 5000;
         syncSettingsControls();
         applyAppearance();
@@ -1106,9 +1107,22 @@
           tauri.event
             .listen(`file-selected:${windowLabel}`, async (event) => {
               const payload = event?.payload;
-              if (payload?.path || typeof payload === 'string') {
-                renderState({ path: payload.path || payload });
+              if (typeof payload === 'string') {
+                renderState({ path: payload });
+                return;
               }
+
+              if (!payload?.path) {
+                return;
+              }
+
+              // Ignore legacy path-only payloads when the richer active-file-changed
+              // event is also being emitted; otherwise they clobber multi-file state.
+              if (payload.index == null && payload.total == null) {
+                return;
+              }
+
+              renderState(payload);
             })
             .catch((err) => console.warn('Failed to register file-selected listener', err));
 

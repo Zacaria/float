@@ -123,6 +123,158 @@ test('active-file-changed renders the selected image with mocked tauri', async (
   await expect(page.locator('#controls')).toBeHidden();
 });
 
+test('legacy file-selected payload does not clobber multi-image state', async ({ page }) => {
+  const distPath = path.resolve(__dirname, '..', 'dist', 'index.html');
+  const mockPath = '/tmp/icon.png';
+  const pixelDataUrl =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sYpWJ0AAAAASUVORK5CYII=';
+
+  await page.addInitScript(({ pixelDataUrl }) => {
+    const listeners: Record<string, Array<(event: { payload?: unknown }) => void>> = {};
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__TAURI__ = {
+      core: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        invoke: (cmd: string, _args: any = {}) => {
+          if (cmd === 'current_window_label') {
+            return Promise.resolve('main');
+          }
+          if (cmd === 'get_settings') {
+            return Promise.resolve({
+              aspect_lock: false,
+              click_through: false,
+              slideshow_enabled: false,
+              slideshow_interval_ms: 5000,
+              opacity_percent: 100,
+              blur_enabled: false,
+              blur_supported: false,
+            });
+          }
+          if (cmd === 'load_image_data') {
+            return Promise.resolve(pixelDataUrl);
+          }
+          if (cmd === 'previous_file' || cmd === 'next_file') {
+            return Promise.resolve();
+          }
+          return Promise.resolve(null);
+        },
+        convertFileSrc: () => 'file:///definitely-missing.png',
+      },
+      event: {
+        listen: (name: string, callback: (event: { payload?: unknown }) => void) => {
+          listeners[name] ||= [];
+          listeners[name].push(callback);
+          return Promise.resolve(() => {});
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__dispatchTauri = (name: string, payload?: unknown) => {
+      (listeners[name] || []).forEach((callback) => callback({ payload }));
+    };
+  }, { pixelDataUrl });
+
+  await page.goto(`file://${distPath}`);
+  await page.evaluate((mockPath) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__dispatchTauri('active-file-changed:main', { path: mockPath, index: 0, total: 2 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__dispatchTauri('file-selected:main', { path: mockPath });
+  }, mockPath);
+
+  await expect(page.locator('#status')).toHaveText('File 1 of 2');
+  await expect(page.locator('#controls')).toBeVisible();
+  await expect(page.locator('#slideshowBtn')).toBeVisible();
+});
+
+test('settings-changed uses the persisted slideshow interval when slideshow is enabled', async ({ page }) => {
+  const distPath = path.resolve(__dirname, '..', 'dist', 'index.html');
+  const mockPath = '/tmp/icon.png';
+  const pixelDataUrl =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sYpWJ0AAAAASUVORK5CYII=';
+
+  await page.addInitScript(({ pixelDataUrl }) => {
+    const listeners: Record<string, Array<(event: { payload?: unknown }) => void>> = {};
+    const scheduledIntervals: number[] = [];
+
+    const originalClearInterval = window.clearInterval.bind(window);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    window.setInterval = ((handler: TimerHandler, timeout?: number, ...args: any[]) => {
+      scheduledIntervals.push(Number(timeout) || 0);
+      return window.setTimeout(handler, timeout, ...args);
+    }) as typeof window.setInterval;
+    window.clearInterval = ((id: number) => {
+      originalClearInterval(id);
+    }) as typeof window.clearInterval;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__TAURI__ = {
+      core: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        invoke: (cmd: string, _args: any = {}) => {
+          if (cmd === 'current_window_label') {
+            return Promise.resolve('main');
+          }
+          if (cmd === 'get_settings') {
+            return Promise.resolve({
+              aspect_lock: false,
+              click_through: false,
+              slideshow_enabled: false,
+              slideshow_interval_ms: 5000,
+              opacity_percent: 100,
+              blur_enabled: false,
+              blur_supported: false,
+            });
+          }
+          if (cmd === 'load_image_data') {
+            return Promise.resolve(pixelDataUrl);
+          }
+          if (cmd === 'previous_file' || cmd === 'next_file') {
+            return Promise.resolve();
+          }
+          return Promise.resolve(null);
+        },
+        convertFileSrc: () => 'file:///definitely-missing.png',
+      },
+      event: {
+        listen: (name: string, callback: (event: { payload?: unknown }) => void) => {
+          listeners[name] ||= [];
+          listeners[name].push(callback);
+          return Promise.resolve(() => {});
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__dispatchTauri = (name: string, payload?: unknown) => {
+      (listeners[name] || []).forEach((callback) => callback({ payload }));
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__getScheduledIntervals = () => scheduledIntervals;
+  }, { pixelDataUrl });
+
+  await page.goto(`file://${distPath}`);
+  await page.evaluate((mockPath) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__dispatchTauri('active-file-changed:main', { path: mockPath, index: 0, total: 2 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__dispatchTauri('settings-changed', { slideshow_enabled: true, slideshow_interval_ms: 10000 });
+  }, mockPath);
+
+  await expect(page.locator('#status')).toHaveText('File 1 of 2');
+  await expect(page.locator('#slideshowBtn')).toHaveText('Slideshow: On');
+
+  const scheduledIntervals = await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (window as any).__getScheduledIntervals();
+  });
+
+  expect(scheduledIntervals).toContain(10000);
+});
+
 test('active-file-changed renders a missing-file state when the image is gone', async ({ page }) => {
   const distPath = path.resolve(__dirname, '..', 'dist', 'index.html');
   const missingPath = '/tmp/missing-shot.png';
