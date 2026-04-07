@@ -569,21 +569,29 @@ fn apply_selection(app: &AppHandle, window: &WebviewWindow, files: Vec<String>) 
     apply_active_file(app, window, &selection)
 }
 
+fn wrapped_selection_index(current: usize, len: usize, delta: isize) -> Option<usize> {
+    if len == 0 {
+        return None;
+    }
+
+    let len = len as isize;
+    let next = (current as isize + delta).rem_euclid(len);
+    Some(next as usize)
+}
+
 fn navigate_selection(app: &AppHandle, window: &WebviewWindow, delta: isize) -> Option<String> {
     if let Some(state) = app.try_state::<AppState>() {
         let mut selections = state.selections.lock();
         if let Some(sel) = selections.get_mut(window.label()) {
             let len = sel.files.len();
-            if len == 0 {
+            if let Some(next_index) = wrapped_selection_index(sel.active, len, delta) {
+                if next_index != sel.active {
+                    sel.active = next_index;
+                    return apply_active_file(app, window, sel);
+                }
                 return None;
             }
-            let current = sel.active as isize;
-            let next = current.saturating_add(delta);
-            let bounded = next.clamp(0, (len as isize) - 1) as usize;
-            if bounded != sel.active {
-                sel.active = bounded;
-                return apply_active_file(app, window, sel);
-            }
+            return None;
         }
     }
     None
@@ -1254,4 +1262,26 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wrapped_selection_index;
+
+    #[test]
+    fn wrapped_selection_moves_forward_and_wraps() {
+        assert_eq!(wrapped_selection_index(0, 3, 1), Some(1));
+        assert_eq!(wrapped_selection_index(2, 3, 1), Some(0));
+    }
+
+    #[test]
+    fn wrapped_selection_moves_backward_and_wraps() {
+        assert_eq!(wrapped_selection_index(2, 3, -1), Some(1));
+        assert_eq!(wrapped_selection_index(0, 3, -1), Some(2));
+    }
+
+    #[test]
+    fn wrapped_selection_handles_empty_lists() {
+        assert_eq!(wrapped_selection_index(0, 0, 1), None);
+    }
 }
