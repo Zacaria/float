@@ -24,8 +24,16 @@ The marketing/download site lives under `site/` and deploys with `.github/workfl
 
 - Public download CTA: `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg`
 - Checksum CTA: `https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256`
+- Windows CTA: `https://github.com/Zacaria/float/releases/latest/download/Float-windows-x64-setup.exe`
 
-When updating the landing page, keep it macOS-only until the Windows public release path has its own landing-page support language.
+When updating the landing page, keep the public feature story aligned with the shipped app:
+
+- dedicated settings window for durable controls
+- configurable and looping slideshow playback for multi-image selections
+- real native opacity rather than CSS-only dimming
+- per-window image isolation and polished empty/error states
+
+Do not promote capability-gated blur support as a headline feature unless the implementation becomes uniformly available across supported platforms.
 
 ## Manual fallback
 
@@ -88,10 +96,13 @@ Before creating the tag:
 - Run `cargo check --manifest-path src-tauri/Cargo.toml`
 - Run `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
 - Confirm the Pages site still describes the current release and links to the stable asset names
+- Run `npm run test:ui`
 
 After the tag build finishes:
 
 - Verify the release contains `Float-macos-universal.dmg`, `Float-macos-universal.sha256`, and `Float-windows-x64-setup.exe`
 - Download the DMG from the release, compare the checksum, and test the install from a clean macOS machine
-- Confirm first launch, file open, fit-to-image, aspect lock, slideshow, multi-file navigation, and persistence all work
+- Confirm first launch, file open, fit-to-image, aspect lock, dedicated settings window, slideshow interval, looping multi-file navigation, native opacity, and persistence all work
+- Confirm opening or changing an image in one Float window does not replace the active image in another
+- Confirm empty, missing-file, and failed-load states still read clearly
 - Confirm the GitHub Pages download button resolves to the latest release asset
