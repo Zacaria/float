@@ -3,6 +3,12 @@
 src-tauri/target/
 **/*.rs.bk
 
+# Node / Playwright
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+
 # macOS
 .DS_Store
 

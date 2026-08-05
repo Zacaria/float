@@ -17,6 +17,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -34,15 +35,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Preview release-plz (dry run)
-        uses: MarcoIeni/release-plz-action@v0.6
+        uses: release-plz/action@v0.5.131
         with:
-          command: release-plz release --config release-plz.toml --dry-run
+          command: release
+          config: release-plz.toml
+          dry_run: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release:
     runs-on: ubuntu-latest
-    needs: [preview]
     if: |
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
@@ -56,8 +58,20 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Run release-plz (creates tag + release)
-        uses: MarcoIeni/release-plz-action@v0.6
+        id: release
+        uses: release-plz/action@v0.5.131
         with:
-          command: release-plz release --config release-plz.toml
+          command: release
+          config: release-plz.toml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger signed release bundles
+        if: steps.release.outputs.releases_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "float") | .version')"
+          test -n "$version"
+          test "$version" != "null"
+          gh workflow run release-bundles.yml --ref "v${version}"

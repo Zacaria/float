@@ -19,7 +19,7 @@ Live app validation adds three corrections:
 ## What Changes
 
 - Add a polished Settings surface to the active Tauri shell, reachable from the native menu and `Cmd/Ctrl+,`, as a dedicated separate window.
-- Present a lightweight General / Shortcuts settings experience that matches the current Tauri product shape without covering the viewer.
+- Present a lightweight Behavior / Appearance settings experience that matches the current Tauri product shape without covering the viewer.
 - Make the Settings surface the dedicated clean home for slideshow timing and opacity controls.
 - Reconcile spec drift by removing stale auto-fit toggle expectations from Settings and menu contracts.
 - Add explicit window appearance requirements for real native opacity and optional blur with graceful platform fallback.

@@ -17,7 +17,7 @@ jobs:
           node-version: '22'
 
       - name: Install JS deps
-        run: npm install --no-fund
+        run: npm ci --no-fund
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps

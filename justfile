@@ -29,7 +29,7 @@ tauri-dev:
 	set -euo pipefail
 	RUST_BACKTRACE=1 cargo tauri dev
 
-# Build Tauri bundles (macOS .app / Windows NSIS)
+# Build Tauri bundles for the current host platform
 tauri-build:
 	set -euo pipefail
 	cargo tauri build
@@ -59,8 +59,8 @@ tauri-check-open-target image:
 	trap 'kill "$DEV_PID" >/dev/null 2>&1 || true; pkill -x float-tauri >/dev/null 2>&1 || true; pkill -x Float >/dev/null 2>&1 || true; echo "Tauri dev log: $LOG_FILE"' EXIT; \
 	scripts/macos-open-target-check.sh "$ABS_IMAGE"
 
-# Run release-plz to bump versions, create tag, and push branch+tags
-# Requires clean working tree and access to origin remote.
+# Publish a version and changelog entry already prepared in the repository.
+# Requires a clean working tree and access to origin.
 release-bump:
 	set -euo pipefail
 	if [ -n "$(git status --porcelain)" ]; then echo "Working tree not clean. Commit or stash first." >&2; exit 1; fi

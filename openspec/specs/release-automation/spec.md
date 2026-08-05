@@ -4,12 +4,12 @@
 TBD - created by archiving change add-release-plz-automation. Update Purpose after archive.
 ## Requirements
 ### Requirement: Automated tagging and releases via release-plz
-The project MUST use release-plz to generate changelog entries, create git tags with prefix `v`, and publish GitHub Releases. The pipeline MUST avoid publishing to crates.io and run via GitHub Actions.
+The project MUST use release-plz to create git tags with prefix `v` and publish GitHub Releases from versions and changelog entries prepared in the repository. The pipeline MUST avoid publishing to crates.io and run via GitHub Actions.
 
 #### Scenario: Release created from main
-- Given changes are merged to the default branch
+- Given a version and changelog entry are prepared on the default branch
 - When the release automation workflow runs
-- Then release-plz updates `CHANGELOG.md`, bumps versions as needed, creates a `v*` tag, and creates/updates a GitHub Release
+- Then release-plz creates the matching `v*` tag and a GitHub Release for the previously unreleased prepared version
 
 #### Scenario: No crates.io publish
 - Given release-plz runs in CI
@@ -18,5 +18,5 @@ The project MUST use release-plz to generate changelog entries, create git tags 
 
 #### Scenario: Artifacts attached by bundling workflow
 - Given a Release exists for tag `v*`
-- When the bundling workflow runs on that tag
+- When the release workflow dispatches the bundling workflow at that tag
 - Then the GitHub Release contains `Float-macos-universal.dmg`, `Float-macos-universal.sha256`, and `Float-windows-x64-setup.exe`

@@ -1,9 +1,11 @@
 [package]
 name = "float-tauri"
-version = "0.1.2"
-description = "Float - Tauri shell"
-authors = ["Float Team"]
+version = "0.2.0"
+description = "Keep reference images visible above your workspace."
+authors = ["Zacaria Chtatar"]
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/Zacaria/float"
+homepage = "https://zacaria.github.io/float/"
 edition = "2021"
 
 [build-dependencies]

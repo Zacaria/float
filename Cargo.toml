@@ -1,9 +1,12 @@
 [package]
 name = "float"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
-description = "Float - minimal utility to keep a window always on top."
-authors = ["Float Team"]
+description = "Keep reference images visible above your workspace."
+authors = ["Zacaria Chtatar"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Zacaria/float"
+homepage = "https://zacaria.github.io/float/"
 
 [dependencies]
 # Windowing/event loop for macOS GUI

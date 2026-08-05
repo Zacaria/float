@@ -1,6 +1,6 @@
 # Releasing Float
 
-Float ships publicly through GitHub Releases, with the macOS download promoted through GitHub Pages. The public deliverables are:
+Float ships publicly through GitHub Releases, with the macOS and Windows downloads promoted through GitHub Pages. The public deliverables are:
 
 - `Float-macos-universal.dmg`
 - `Float-macos-universal.sha256`
@@ -16,7 +16,7 @@ The `release-bundles` workflow expects these repository secrets:
 - `APPLE_PASSWORD`: app-specific password for the Apple account.
 - `APPLE_TEAM_ID`: Apple Developer team identifier.
 
-The workflow imports the certificate, resolves the `Developer ID Application` signing identity, builds a universal Tauri bundle, explicitly notarizes the generated DMG, staples the app and DMG, validates notarization, builds the Windows NSIS installer, and publishes the stable macOS and Windows assets to GitHub Releases.
+After `release-plz` creates a tag and GitHub Release, the release workflow explicitly dispatches `release-bundles.yml` at that tag. The bundle workflow imports the certificate, resolves the `Developer ID Application` signing identity, builds a universal Tauri bundle, explicitly notarizes the generated DMG, staples the app and DMG, validates notarization, builds the Windows NSIS installer, and publishes the stable macOS and Windows assets to GitHub Releases.
 
 ## GitHub Pages landing page
 
@@ -93,6 +93,8 @@ shasum -a 256 Float-macos-universal.dmg > Float-macos-universal.sha256
 
 Before creating the tag:
 
+- Update the root package, Tauri package, and Tauri bundle versions together
+- Move the release notes from `Unreleased` into the matching version in `CHANGELOG.md`
 - Run `cargo check --manifest-path src-tauri/Cargo.toml`
 - Run `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`
 - Confirm the Pages site still describes the current release and links to the stable asset names

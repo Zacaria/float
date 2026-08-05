@@ -1,18 +1,18 @@
 # Float
 
-A polished always-on-top image viewer built in Rust with a Tauri shell for macOS and Windows (Linux dev-only for now). It pins the window above other apps, lets you open an image or image set, and keeps reference material visible without turning into another workspace. Behavior is defined in OpenSpec (see `openspec/specs/`).
+Float started with a small annoyance: reference images kept disappearing behind the editor. It is the small native utility I wanted: open an image or a set, keep it above the workspace, and get the viewer out of the way. Float supports macOS and Windows, with Linux available for development only. Stable behavior is defined in `openspec/specs/`; the current Settings work is tracked in `openspec/changes/redesign-settings-surface/` until its final cross-platform verification is complete.
 
 ## Features
 - Always-on-top window on launch (macOS + Windows).
 - Open an image via File → Open… (`Cmd/Ctrl+O`); title shows the filename.
-- Auto-fit to image on selection with manual Fit Now (`Cmd/Ctrl+F`).
+- Manual Fit to Image Now (`Cmd/Ctrl+F`) when the viewer window needs resizing.
 - Dedicated Settings window (`Cmd+,`) with Behavior and Appearance tabs.
 - Configurable slideshow timing with looping previous/next navigation for multi-image selections.
 - Real native window opacity control plus durable aspect-lock and click-through preferences.
 - Per-window image isolation, so changing one Float window does not replace another.
 - Polished empty, missing-file, and failed-load states.
 
-Relevant specs: `specs/always-on-top/`, `specs/file-selection/`, `specs/display-image/`, `specs/fit-window/`, `specs/aspect-lock/`, `specs/menu-and-shortcuts/`, `specs/settings-panel/`, `specs/settings-persistence/`, `specs/window-size/`.
+Relevant specs: `openspec/specs/always-on-top/`, `openspec/specs/file-selection/`, `openspec/specs/display-image/`, `openspec/specs/fit-window/`, `openspec/specs/aspect-lock/`, `openspec/specs/menu-and-shortcuts/`, `openspec/specs/window-size/`, and `openspec/changes/redesign-settings-surface/` for the pending Settings delta.
 
 ## Platforms
 - macOS: supported (development and bundled app).
@@ -47,11 +47,11 @@ just tauri-dev            # Runs Tauri in dev mode
 
 ## Internal Packaging
 ```sh
-just tauri-build          # macOS .app + Windows NSIS installer
+just tauri-build          # Build bundles for the current host platform
 ```
-Outputs:
-- macOS app bundle: `src-tauri/target/release/bundle/macos/Float.app`
-- Windows NSIS installer: `src-tauri/target/release/bundle/nsis/Float_*.exe`
+Platform outputs:
+- macOS: app bundle at `src-tauri/target/release/bundle/macos/Float.app` and DMG under `src-tauri/target/release/bundle/dmg/`.
+- Windows: NSIS installer under `src-tauri/target/release/bundle/nsis/`.
 
 To open the built macOS app locally:
 ```sh
@@ -94,8 +94,8 @@ The landing page highlights both supported public downloads: the notarized macOS
 
 ### CI release flow
 
-1. `release-plz` updates `CHANGELOG.md`, versions, tags, and the GitHub Release from `.github/workflows/release-plz.yml`.
-2. `.github/workflows/release-bundles.yml` builds a universal macOS bundle on `v*` tags, signs it with a `Developer ID Application` certificate, staples and validates the notarized app and DMG, generates `Float-macos-universal.sha256`, builds the Windows NSIS installer, and publishes all three public assets to the GitHub Release.
+1. Version and changelog changes are prepared in the repository; `release-plz` creates the matching `v*` tag and GitHub Release from `.github/workflows/release-plz.yml`, then dispatches the bundle workflow at that exact tag.
+2. `.github/workflows/release-bundles.yml` builds a universal macOS bundle for the dispatched `v*` tag, signs it with a `Developer ID Application` certificate, staples and validates the notarized app and DMG, generates `Float-macos-universal.sha256`, builds the Windows NSIS installer, and publishes all three public assets to the GitHub Release.
 3. `.github/workflows/pages.yml` deploys the static landing page from `site/` to GitHub Pages on `master`.
 
 ### CI secret contract
@@ -120,4 +120,8 @@ See [`docs/releasing.md`](docs/releasing.md) for the exact contract, fallback co
 - Specs live under `openspec/specs/`; proposed changes go in `openspec/changes/`.
 - Prefer `just tauri-dev` for local runs; keep changes small and update specs when behavior changes.
 - Commit subjects must use Conventional Commits such as `feat: ...`, `fix(menu): ...`, or `chore!: ...`.
-- Run `just install-git-hooks` once to enable the local `commit-msg` guard, or validate a range manually with `just check-commits origin/main..HEAD`.
+- Run `just install-git-hooks` once to enable the local `commit-msg` guard, or validate a range manually with `just check-commits origin/master..HEAD`.
+
+## License
+
+Float is available under either the [Apache License 2.0](LICENSE-APACHE) or the [MIT License](LICENSE-MIT), at your option.

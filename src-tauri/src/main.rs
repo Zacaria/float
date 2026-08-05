@@ -26,7 +26,7 @@ use objc2_app_kit::NSWindow;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::{
     Foundation::HWND,
-    UI::WindowsAndMessaging::{LWA_ALPHA, SetLayeredWindowAttributes},
+    UI::WindowsAndMessaging::{SetLayeredWindowAttributes, LWA_ALPHA},
 };
 
 const SETTINGS_WINDOW_LABEL: &str = "settings";
@@ -372,10 +372,7 @@ fn create_viewer_window(app: &AppHandle) -> Result<WebviewWindow, Error> {
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     let builder = builder.transparent(true);
-    #[cfg(not(any(
-        target_os = "windows",
-        target_os = "macos"
-    )))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let builder = builder;
 
     let window = builder.build()?;
@@ -387,10 +384,7 @@ fn create_viewer_window(app: &AppHandle) -> Result<WebviewWindow, Error> {
         state.selections.lock().remove(&label);
         state.aspect_ratio.lock().remove(&label);
         state.adjusting_resize.lock().remove(&label);
-        state
-            .last_focused_window
-            .lock()
-            .replace(label);
+        state.last_focused_window.lock().replace(label);
     }
     let _ = window.set_focus();
     Ok(window)
@@ -446,7 +440,8 @@ fn focused_any_window(app: &AppHandle) -> Option<WebviewWindow> {
 }
 
 fn focused_viewer_window(app: &AppHandle) -> Option<WebviewWindow> {
-    if let Some(window) = focused_any_window(app).filter(|win| is_viewer_window_label(win.label())) {
+    if let Some(window) = focused_any_window(app).filter(|win| is_viewer_window_label(win.label()))
+    {
         return Some(window);
     }
 
@@ -778,8 +773,7 @@ fn load_image_data(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn fit_now(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
-    let path = active_file_for_window(&app, window.label())
-        .map(PathBuf::from);
+    let path = active_file_for_window(&app, window.label()).map(PathBuf::from);
 
     let path = match path {
         Some(p) => p,
@@ -959,8 +953,8 @@ fn pick_and_apply_selection(app: AppHandle, target_label: Option<String>) -> Opt
         }
     }
 
-    let focus =
-        viewer_window_for_label(&app, target_label.as_deref()).or_else(|| focused_viewer_window(&app));
+    let focus = viewer_window_for_label(&app, target_label.as_deref())
+        .or_else(|| focused_viewer_window(&app));
     let parent = focus.as_ref();
     let files = pick_files(&app, parent);
     if files.is_empty() {
@@ -1138,7 +1132,8 @@ fn main() {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open" => {
                 let handle = app.clone();
-                let target_label = focused_viewer_window(app).map(|window| window.label().to_string());
+                let target_label =
+                    focused_viewer_window(app).map(|window| window.label().to_string());
                 async_runtime::spawn(async move {
                     let _ = pick_and_apply_selection(handle, target_label);
                 });

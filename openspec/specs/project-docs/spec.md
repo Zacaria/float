@@ -14,9 +14,9 @@ The repository MUST include a README that describes what the app does, supported
 #### Scenario: Release pipeline documented
 - Given a contributor preparing a release
 - When they follow the README’s release/bundle section
-- Then they understand that tagged GitHub Releases publish `Float-macos-universal.dmg`, `Float-macos-universal.sha256`, and `Float-windows-x64-setup.exe`, while the GitHub Pages landing page remains macOS-only
+- Then they understand that tagged GitHub Releases publish `Float-macos-universal.dmg`, `Float-macos-universal.sha256`, and `Float-windows-x64-setup.exe`, and that the GitHub Pages landing page presents both supported downloads
 
 #### Scenario: Platform nuances documented
 - Given a user on macOS or Windows
 - When they read the feature/platform notes
-- Then they see which features are platform-specific (e.g., Quick Look macOS-only) and links to OpenSpec capabilities for details
+- Then they see that macOS and Windows are supported, Linux is development-only, and the behavior details link to the matching OpenSpec capabilities

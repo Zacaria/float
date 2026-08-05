@@ -22,7 +22,7 @@ The first implementation pass proved that an inline settings modal is the wrong 
 ## Decisions
 
 - Use a dedicated Tauri settings window opened from the native menu / shortcut so configuration is separate from the viewer.
-- Keep General and Shortcuts as the primary information architecture because that matches both the existing spec and the repo's abandoned prior art.
+- Separate Behavior and Appearance so durable viewer controls and capability-gated native effects remain easy to scan.
 - Treat durable preferences and session controls differently: Settings owns persistent viewer preferences, while session-state playback controls remain outside the core Settings contract unless later work intentionally moves them.
 - Treat active image selection and slideshow playback state as window-scoped viewer state, not settings state.
 - Implement opacity through native window transparency rather than CSS opacity on viewer content.
