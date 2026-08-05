@@ -3,260 +3,323 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Float for macOS and Windows</title>
+    <title>Float — Keep reference images in sight</title>
     <meta
       name="description"
-      content="Float keeps reference images visible above your editor or browser on macOS and Windows, without turning the viewer into another workspace."
+      content="Float is a small always-on-top image viewer for macOS and Windows. Keep references visible without turning the viewer into another workspace."
     />
+    <meta name="theme-color" content="#0b0c10" />
     <link rel="icon" href="./assets/float-icon.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="page-shell">
+    <div class="site-shell">
       <header class="site-header">
-        <div class="brand-lockup">
-          <img class="brand-mark" src="./assets/float-icon.png" alt="Float app icon" />
-          <div class="brand-copy">
-            <p class="eyebrow">Pinned utility for macOS + Windows</p>
-            <a class="brand-name" href="https://github.com/Zacaria/float">Float</a>
-          </div>
-        </div>
+        <a class="brand-lockup" href="#top" aria-label="Float home">
+          <img class="brand-mark" src="./assets/float-icon.png" alt="" />
+          <span class="brand-copy">
+            <strong>Float</strong>
+            <span>Reference viewer</span>
+          </span>
+        </a>
+
         <div class="header-actions">
           <nav class="site-nav" aria-label="Primary">
-            <a href="#whats-new">What’s New</a>
-            <a href="#details">Details</a>
+            <a href="#whats-new">What’s new</a>
+            <a href="#details">Why Float</a>
             <a href="https://github.com/Zacaria/float/releases">Releases</a>
           </nav>
-          <a class="button button-primary header-cta" href="#download">Download</a>
+          <a class="header-cta" href="#download">Download</a>
         </div>
       </header>
 
-      <main>
+      <main id="top">
         <section class="hero" id="download">
           <div class="hero-copy">
-            <div class="hero-intro">
-              <p class="hero-kicker">Available now for macOS and Windows</p>
-              <div class="platform-ribbon" role="list" aria-label="Supported platforms">
-                <span class="platform-pill platform-pill-macos">macOS signed + notarized</span>
-                <span class="platform-pill platform-pill-windows">Windows x64 installer</span>
-              </div>
+            <div class="availability">
+              <span class="availability-dot" aria-hidden="true"></span>
+              Available for macOS and Windows
             </div>
-            <h1>Keep reference images pinned without letting the viewer get in the way.</h1>
+            <h1>Keep the reference.<br /><span>Lose the clutter.</span></h1>
             <p class="hero-body">
-              I made Float after too many reference images disappeared behind my editor. It opens
-              fast, stays above the workspace, and keeps its controls out of the image until they
-              are useful.
+              I made Float after too many reference images disappeared behind my
+              editor. It opens fast, stays above the workspace, and keeps its
+              controls out of the image until they are useful.
             </p>
-            <p class="hero-download-label">Choose your platform</p>
-            <div class="hero-downloads" role="group" aria-label="Download Float">
+
+            <div
+              class="hero-downloads"
+              role="group"
+              aria-label="Download Float"
+            >
               <a
-                class="download-tile download-macos"
+                class="download-button download-primary"
                 href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg"
               >
-                <span class="download-platform">macOS</span>
-                <strong>Latest macOS build</strong>
-                <span class="download-note">Signed and notarized universal DMG for Apple Silicon and Intel</span>
-                <span class="download-cta">Download DMG</span>
+                <span class="download-icon" aria-hidden="true">⌘</span>
+                <span>
+                  <small>macOS · Apple Silicon + Intel</small>
+                  <strong>Download universal DMG</strong>
+                </span>
+                <span class="download-arrow" aria-hidden="true">↘</span>
               </a>
               <a
-                class="download-tile download-windows"
+                class="download-button"
                 href="https://github.com/Zacaria/float/releases/latest/download/Float-windows-x64-setup.exe"
               >
-                <span class="download-platform">Windows</span>
-                <strong>Latest Windows build</strong>
-                <span class="download-note">Direct NSIS installer for x64 desktops</span>
-                <span class="download-cta">Download setup</span>
+                <span
+                  class="download-icon download-icon-windows"
+                  aria-hidden="true"
+                  >⊞</span
+                >
+                <span>
+                  <small>Windows · x64</small>
+                  <strong>Download installer</strong>
+                </span>
+                <span class="download-arrow" aria-hidden="true">↘</span>
               </a>
             </div>
-            <div class="hero-actions">
-              <a class="button button-secondary" href="https://github.com/Zacaria/float/releases/latest"
-                >All release assets</a
+
+            <div class="hero-trust">
+              <span>Signed + notarized on macOS</span>
+              <span>No account</span>
+              <a href="https://github.com/Zacaria/float/releases/latest"
+                >All release assets ↗</a
               >
             </div>
-            <p class="hero-trust">
-              Native app. No account. Downloaded directly from GitHub Releases.
-            </p>
           </div>
 
-          <div class="hero-visual" aria-hidden="true">
-            <div class="app-stage">
-              <section class="app-window viewer-window">
-                <div class="window-chrome">
-                  <div class="window-lights">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <span class="window-title">Float — figma_shortcuts_cheatsheet.png</span>
-                </div>
-                <div class="viewer-canvas">
-                  <img src="./assets/figma_shortcuts_cheatsheet.png" alt="" />
-                  <div class="viewer-badge viewer-badge-top">Always on top</div>
-                  <div class="viewer-badge viewer-badge-bottom">Window opacity · 80%</div>
-                  <div class="viewer-toolbar">
-                    <span>Previous</span>
-                    <span>Slideshow · 10 sec</span>
-                    <span>Next</span>
-                  </div>
-                </div>
-              </section>
+          <div
+            class="hero-visual"
+            role="img"
+            aria-label="Float viewer displaying a reference image beside its settings panel"
+          >
+            <div class="stage-grid" aria-hidden="true"></div>
+            <p class="stage-caption stage-caption-top" aria-hidden="true">
+              Always above your workspace
+            </p>
+            <p class="stage-caption stage-caption-side" aria-hidden="true">
+              Controls appear when useful
+            </p>
 
-              <aside class="app-window settings-window">
-                <div class="window-chrome">
-                  <div class="window-lights">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <span class="window-title">Float Settings</span>
+            <section class="app-window viewer-window" aria-hidden="true">
+              <div class="window-chrome">
+                <div class="window-lights">
+                  <span></span><span></span><span></span>
                 </div>
-                <div class="settings-mini">
-                  <div class="settings-mini-tabs">
-                    <span class="active">Behavior</span>
-                    <span>Appearance</span>
-                  </div>
-                  <div class="settings-mini-pane">
-                    <div class="settings-mini-row">
-                      <div>
-                        <strong>Lock aspect ratio</strong>
-                        <p>Keep manual resizing constrained.</p>
-                      </div>
-                      <span class="mini-toggle is-on"></span>
-                    </div>
-                    <div class="settings-mini-row">
-                      <div>
-                        <strong>Slideshow interval</strong>
-                        <p>Applied when the window has multiple images.</p>
-                      </div>
-                      <span class="mini-pill">10 sec</span>
-                    </div>
-                    <div class="settings-mini-row">
-                      <div>
-                        <strong>Window opacity</strong>
-                        <p>Reveal your workspace without dimming the app chrome.</p>
-                      </div>
-                      <span class="mini-pill">80%</span>
-                    </div>
-                  </div>
+                <span class="window-title">figma_shortcuts_cheatsheet.png</span>
+              </div>
+              <div class="viewer-canvas">
+                <img src="./assets/figma_shortcuts_cheatsheet.png" alt="" />
+                <div class="viewer-status">Pinned</div>
+                <div class="viewer-toolbar">
+                  <span>Previous</span>
+                  <span>Slideshow · 10 sec</span>
+                  <span>Next</span>
                 </div>
-              </aside>
+              </div>
+            </section>
 
-              <div class="visual-badge visual-badge-top">Dedicated settings window</div>
-              <div class="visual-badge visual-badge-bottom">Looping slideshow · isolated windows</div>
-            </div>
+            <aside class="app-window settings-window" aria-hidden="true">
+              <div class="window-chrome">
+                <div class="window-lights">
+                  <span></span><span></span><span></span>
+                </div>
+                <span class="window-title">Float settings</span>
+              </div>
+              <div class="settings-mini">
+                <div class="settings-mini-tabs">
+                  <span class="active">Behavior</span>
+                  <span>Appearance</span>
+                </div>
+                <div class="settings-mini-pane">
+                  <div class="settings-mini-row">
+                    <div>
+                      <strong>Lock aspect ratio</strong>
+                      <p>Keep manual resizing constrained.</p>
+                    </div>
+                    <span class="mini-toggle is-on"></span>
+                  </div>
+                  <div class="settings-mini-row">
+                    <div>
+                      <strong>Slideshow interval</strong>
+                      <p>Cycle through selected images.</p>
+                    </div>
+                    <span class="mini-pill">10 sec</span>
+                  </div>
+                  <div class="settings-mini-row">
+                    <div>
+                      <strong>Window opacity</strong>
+                      <p>See the workspace beneath Float.</p>
+                    </div>
+                    <span class="mini-pill">80%</span>
+                  </div>
+                </div>
+              </div>
+            </aside>
           </div>
         </section>
 
-        <section class="support-strip" id="whats-new">
-          <div>
-            <p class="eyebrow">What’s new in 0.2</p>
-            <h2>Polish that makes Float feel complete without making it heavier.</h2>
+        <section class="whats-new" id="whats-new">
+          <div class="section-intro">
+            <p class="section-label">What’s new in 0.2</p>
+            <h2>More capable.<br />Still unmistakably small.</h2>
+            <p>
+              Float now handles the parts around the image with more care,
+              without becoming another app you need to manage.
+            </p>
           </div>
-          <div class="support-copy support-audience">
-            <span>Dedicated settings window</span>
-            <span>Real native opacity</span>
-            <span>Looping slideshow playback</span>
-            <span>Per-window image isolation</span>
-            <span>Smarter overlay controls</span>
-            <span>Better empty and load-failure states</span>
+
+          <div class="feature-list">
+            <article>
+              <span class="feature-number" aria-hidden="true">01</span>
+              <div>
+                <h3>Settings stay off the image</h3>
+                <p>
+                  Opacity, slideshow timing, aspect lock, and click-through live
+                  in a dedicated panel.
+                </p>
+              </div>
+            </article>
+            <article>
+              <span class="feature-number" aria-hidden="true">02</span>
+              <div>
+                <h3>Every window keeps its place</h3>
+                <p>
+                  Pin a mockup here and a cheat sheet there. Each viewer keeps
+                  its own image and navigation state.
+                </p>
+              </div>
+            </article>
+            <article>
+              <span class="feature-number" aria-hidden="true">03</span>
+              <div>
+                <h3>Slideshows loop cleanly</h3>
+                <p>
+                  Open an image set, choose the interval once, then move through
+                  it manually or automatically.
+                </p>
+              </div>
+            </article>
+            <article>
+              <span class="feature-number" aria-hidden="true">04</span>
+              <div>
+                <h3>Quiet, clear viewer states</h3>
+                <p>
+                  Empty, missing, and failed-load states explain what happened
+                  without filling the window with chrome.
+                </p>
+              </div>
+            </article>
           </div>
         </section>
 
-        <section class="feature-runway">
-          <article>
-            <p class="eyebrow">Settings that stay off the image</p>
-            <h3>Use a clean dedicated panel for durable behavior and appearance controls.</h3>
+        <section class="story" id="details">
+          <div class="story-heading">
+            <p class="section-label">Built for reference work</p>
+            <h2>Made for the moment between looking and making.</h2>
+          </div>
+          <div class="story-copy">
             <p>
-              Adjust slideshow timing, opacity, aspect lock, and click-through behavior in a
-              separate settings window instead of covering the file you are actively referencing.
-            </p>
-          </article>
-          <article>
-            <p class="eyebrow">Multi-window integrity</p>
-            <h3>Open more than one Float window without one image selection stomping another.</h3>
-            <p>
-              Each viewer window keeps its own active image and navigation state, so you can pin a
-              mockup in one spot and a cheat sheet in another without the app losing track.
-            </p>
-          </article>
-          <article>
-            <p class="eyebrow">Slideshows that feel finished</p>
-            <h3>Set the interval once, then cycle through a selected image set in a loop.</h3>
-            <p>
-              Open multiple images in one window to get Previous, Next, and slideshow controls that
-              only appear when they are actually useful.
-            </p>
-          </article>
-          <article>
-            <p class="eyebrow">Calmer viewer chrome</p>
-            <h3>Empty, missing, and failed-load states read like product decisions, not mistakes.</h3>
-            <p>
-              Float stays intentionally sparse while giving clearer feedback when a file is missing,
-              unreadable, or simply not loaded yet.
-            </p>
-          </article>
-        </section>
-
-        <section class="gallery" id="details">
-          <div class="gallery-copy">
-            <p class="eyebrow">Still built for reference work</p>
-            <h2>Reference imagery stays legible without turning into another workspace.</h2>
-            <p>
-              Float is still intentionally small: no dashboard, no sync model, no browser tabs.
-              Just a viewer that keeps visual context alive on the desktop while getting less clumsy
-              about the states and controls that matter.
+              Float is intentionally small: no dashboard, no sync model, no
+              browser tabs. Just a viewer that keeps visual context alive while
+              you draw, design, code, learn, or play.
             </p>
           </div>
+
           <div class="gallery-grid">
-            <figure class="gallery-card">
-              <img src="./assets/figma_shortcuts_cheatsheet.png" alt="Figma shortcuts reference" />
-              <figcaption>Pin shortcut references above your editor and leave the controls out of the way.</figcaption>
+            <figure class="gallery-card gallery-card-main">
+              <img
+                src="./assets/figma_shortcuts_cheatsheet.png"
+                alt="Figma shortcuts reference"
+              />
+              <figcaption>
+                <span>Design</span>
+                Keep shortcuts above the editor without covering the canvas.
+              </figcaption>
             </figure>
-            <figure class="gallery-card">
-              <img src="./assets/lol_wave_management.png" alt="Annotated wave management image" />
-              <figcaption>Keep a second Float window nearby without replacing the first one’s image.</figcaption>
+            <figure class="gallery-card gallery-card-secondary">
+              <img
+                src="./assets/lol_wave_management.png"
+                alt="Annotated wave management image"
+              />
+              <figcaption>
+                <span>Learn</span>
+                Keep a second reference nearby without replacing the first.
+              </figcaption>
             </figure>
-            <figure class="gallery-card">
-              <img src="./assets/combos_cheatsheet.png" alt="Cheat sheet image in Float" />
-              <figcaption>Move through a selected image set with looping slideshow playback.</figcaption>
+            <figure class="gallery-card gallery-card-tertiary">
+              <img
+                src="./assets/combos_cheatsheet.png"
+                alt="Game combo cheat sheet"
+              />
+              <figcaption>
+                <span>Practice</span>
+                Move through a reference set with a looping slideshow.
+              </figcaption>
             </figure>
           </div>
         </section>
 
         <section class="release-panel">
-          <div>
-            <p class="eyebrow">Release details</p>
-            <h2>Pick the right build, install in a minute, and get back to work.</h2>
+          <div class="release-heading">
+            <p class="section-label">Ready when the reference is</p>
+            <h2>Download. Pin. Get back to work.</h2>
           </div>
-          <div class="release-layout">
-            <div class="release-card">
-              <p class="release-card-label">Direct download</p>
-              <ul class="release-facts">
-                <li>macOS: signed, notarized universal DMG</li>
-                <li>Windows: direct x64 installer</li>
-                <li>Distribution: GitHub Releases with stable asset names</li>
-              </ul>
-            </div>
-            <div class="release-install">
-              <ol class="install-steps">
-                <li>Download the latest macOS DMG or Windows setup file.</li>
-                <li>On macOS, drag Float into Applications. On Windows, run the installer.</li>
-                <li>Launch Float, press <span>⌘O</span> or <span>Ctrl+O</span>, and open your first image or image set.</li>
-                <li>Press <span>⌘,</span> or use Settings to tune opacity and slideshow timing.</li>
-              </ol>
-              <div class="release-links">
-                <a href="https://github.com/Zacaria/float/releases/latest">Latest release notes</a>
-                <a href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256"
-                  >macOS checksum</a
-                >
-                <a href="https://github.com/Zacaria/float/releases">All release assets</a>
-                <a href="https://github.com/Zacaria/float">Source on GitHub</a>
-                <a href="https://github.com/Zacaria/float#license">MIT or Apache-2.0 license</a>
-              </div>
-            </div>
+
+          <div
+            class="release-downloads"
+            role="group"
+            aria-label="Download Float release"
+          >
+            <a
+              href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.dmg"
+            >
+              <span><small>macOS</small><strong>Universal DMG</strong></span
+              ><span aria-hidden="true">↘</span>
+            </a>
+            <a
+              href="https://github.com/Zacaria/float/releases/latest/download/Float-windows-x64-setup.exe"
+            >
+              <span><small>Windows</small><strong>x64 installer</strong></span
+              ><span aria-hidden="true">↘</span>
+            </a>
+          </div>
+
+          <div class="release-meta">
+            <p>
+              Launch Float, press <kbd>⌘O</kbd> or <kbd>Ctrl+O</kbd>, and choose
+              an image or image set.
+            </p>
+            <nav aria-label="Release details">
+              <a href="https://github.com/Zacaria/float/releases/latest"
+                >Release notes</a
+              >
+              <a
+                href="https://github.com/Zacaria/float/releases/latest/download/Float-macos-universal.sha256"
+                >Checksum</a
+              >
+              <a href="https://github.com/Zacaria/float">Source</a>
+              <a href="https://github.com/Zacaria/float#license"
+                >MIT / Apache-2.0</a
+              >
+            </nav>
           </div>
         </section>
       </main>
+
+      <footer>
+        <a class="brand-lockup footer-brand" href="#top">
+          <img class="brand-mark" src="./assets/float-icon.png" alt="" />
+          <span class="brand-copy"
+            ><strong>Float</strong
+            ><span>Keep visual context in sight.</span></span
+          >
+        </a>
+        <p>
+          A small utility by <a href="https://github.com/Zacaria">Zacaria</a>.
+        </p>
+      </footer>
     </div>
   </body>
 </html>
