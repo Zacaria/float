@@ -210,6 +210,16 @@ jobs:
           if (-not $installer) { Write-Error "Installer not found"; exit 1 }
           Copy-Item $installer.FullName "Float-windows-x64-setup.exe" -Force
 
+      - name: Retain Windows packages for verification diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: float-windows-diagnostics
+          path: |
+            src-tauri/target/release/float-tauri.exe
+            Float-windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Verify final NSIS and installed application
         run: python scripts/verify-packaging.py windows Float-windows-x64-setup.exe verification-windows.json
 

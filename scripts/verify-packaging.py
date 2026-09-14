@@ -99,7 +99,15 @@ def verify_group(group, resources, source_frames, language):
         payload = resources.get((resource_id, language))
         require(payload is not None and len(payload) == length, 'Missing/truncated icon resource')
         actual.append((group[offset:offset + 8], payload))
-    require(sorted(actual) == sorted(source_frames), 'Embedded PE icon differs from approved ICO')
+    if sorted(actual) != sorted(source_frames):
+        details = {
+            'language': language,
+            'source': [{'metadata': metadata.hex(), 'sha256': sha(payload), 'bytes': len(payload)}
+                       for metadata, payload in source_frames],
+            'embedded': [{'metadata': metadata.hex(), 'sha256': sha(payload), 'bytes': len(payload)}
+                         for metadata, payload in actual],
+        }
+        raise ValueError('Embedded PE icon differs from approved ICO: ' + json.dumps(details, separators=(',', ':')))
     return [sha(payload) for _, payload in actual]
 
 
