@@ -1,6 +1,6 @@
 [package]
 name = "float"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Keep reference images visible above your workspace."
 authors = ["Zacaria Chtatar"]
@@ -23,7 +23,7 @@ directories = "5"
 [package.metadata.bundle]
 name = "Float"
 identifier = "com.havesomecode.float"
-icon = []
+icon = ["src-tauri/icons/icon.icns"]
 resources = []
 category = "public.app-category.utilities"
 short_description = "Keep a window always on top."

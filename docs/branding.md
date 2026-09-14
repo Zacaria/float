@@ -60,10 +60,12 @@ the master or web exports. ICNS entry ordering varies between CLI runs, so the
 script sorts its container entries by their four-byte type. Every encoded
 image/mask payload remains verbatim. This makes the final family byte reproducible.
 
-The existing links in `dist/index.html` and `site/index.html` and the bundle
-icon paths in `src-tauri/tauri.conf.json` already target these files. No HTML,
-CSS, UI logic or bundle configuration edits were needed. The legacy root
-`Cargo.toml` has an empty bundle icon list and is outside the active Tauri flow.
+The links in `dist/index.html` and `site/index.html` and the Tauri bundle icon
+paths target these files. The v0.2.1 patch also points the legacy root
+`Cargo.toml` bundle at `src-tauri/icons/icon.icns`. NSIS uses the approved ICO
+for both its installer and uninstaller via `installerIcon` and
+`scripts/nsis-branding.nsh`; application, shortcut and Add/Remove Programs
+icons come from the application EXE.
 
 ## Reproduce
 
@@ -143,3 +145,47 @@ inventory. Compositing there is for review only and does not alter exported asse
 The `proposals/implementation-verification/` directory retains the initial
 53-file inventory, RED/GREEN logs, final UI log, native compile failure log,
 and reproduction log for parent verification.
+
+
+## v0.2.1 packaged release regression
+
+The v0.2.0 release tag (`e6b27c8`) predates the approved-icon commit (`b123119`).
+Changing source assets did not update already shipped installers. Version 0.2.1
+rebuilds those containers from the approved artwork without regenerating it.
+
+Both native release runners now run `npm run test:branding` and
+`npm run test:release` before building with Tauri CLI 2.8.4. The final-container
+checks in `scripts/verify-packaging.py` must pass before release artifact upload:
+
+- macOS validates the final stable DMG's staple and Gatekeeper assessment,
+  mounts it read-only, requires exactly `Float.app`, resolves `CFBundleIconFile`,
+  compares the app and mounted-volume ICNS bytes to the approved source, checks both bundle versions
+  and identifier, verifies the mounted app's signature and Gatekeeper acceptance,
+  and decodes the ICNS with `iconutil`. It detaches in `finally`, including on
+  assertion failure. Any exposed `dist` assets must match checkout bytes.
+- Windows uses pinned `pefile==2024.8.26` to compare every frame of every icon
+  group in the application EXE and final NSIS installer to the approved ICO.
+  It silently installs under `RUNNER_TEMP` with no app launch or shortcuts,
+  then checks the installed EXE and uninstaller. Installed and built app EXEs
+  must be byte-identical; PE file/product versions must match Tauri config.
+  NSIS can write installation registry entries on the disposable CI runner;
+  temporary installed files are removed after verification.
+- Successful JSON evidence records source commit, package version, approved
+  master hash, source and packaged icon hashes (PE frame hashes, since PE embeds
+  ICO frames rather than the ICO container), and final DMG/installer SHA-256.
+  Reports are CI artifacts, separate from the three stable public downloads.
+
+Local patch validation on 2026-09-14: the three initial version, legacy icon
+and workflow regressions failed before implementation. After implementation,
+all 4 source release checks, 11 Python helper tests, 59 branding checks and
+7 mocked UI tests passed. Actual v0.2.0 ICNS/ICO fixtures prove stale art is
+rejected; real minimal PE resource fixtures exercise the pefile reader, including
+version mismatch, mixed frames and extra groups. A mocked command test checks
+DMG cleanup on failure only; it does not claim a successful native verification.
+
+No native containers were built or verified on this Linux host. macOS tools,
+Windows installation and signing/notarization require the remote native runners.
+Tauri normally compiles web assets into the executable; inaccessible assets are
+explicitly reported as such, never marked verified by a raw binary substring
+search. Source branding and UI tests cover the checked-in frontend separately.
+See [release verification instructions](releasing.md#packaged-verification).

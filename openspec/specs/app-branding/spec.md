@@ -24,6 +24,15 @@ icons MUST be derived from that master using the pinned export process in
 - And the apple touch icon is derived directly from the master at 180×180
 - And `npm run test:branding` verifies export bytes, dimensions and branding references
 
+#### Scenario: Published installers contain the approved artwork
+- Given a patch release built after the approved-icon source update
+- When preparing the final notarized DMG and Windows NSIS installer for publication
+- Then both runners pass source branding tests before building
+- And the mounted DMG's Float.app icon bytes and bundle versions match the approved source and current config
+- And Windows installer, application, installed application and uninstaller PE icons match the approved ICO frames
+- And legacy macOS packaging references the canonical ICNS
+- And failed packaged verification blocks public asset upload
+
 ### Requirement: Product name is Float across surfaces
 The application MUST present the product name as "Float" across UI, metadata, bundles, and documentation so no "Always On Top" branding remains.
 

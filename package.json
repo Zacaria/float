@@ -7,6 +7,8 @@
   "scripts": {
     "test:ui": "playwright test tests/ui-mock.spec.ts tests/settings-panel.spec.ts",
     "test:ui:tauri": "playwright test tests/tauri-driver.spec.ts",
-    "test:branding": "node --test tests/branding.test.cjs"
-  }
+    "test:branding": "node --test tests/branding.test.cjs",
+    "test:release": "node scripts/test-release.cjs"
+  },
+  "version": "0.2.1"
 }

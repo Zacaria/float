@@ -98,6 +98,16 @@ The landing page highlights both supported public downloads: the notarized macOS
 2. `.github/workflows/release-bundles.yml` builds a universal macOS bundle for the dispatched `v*` tag, signs it with a `Developer ID Application` certificate, staples and validates the notarized app and DMG, generates `Float-macos-universal.sha256`, builds the Windows NSIS installer, and publishes all three public assets to the GitHub Release.
 3. `.github/workflows/pages.yml` deploys the static landing page from `site/` to GitHub Pages on `master`.
 
+Before public artifact upload, both native build jobs run branding and release
+regression tests and inspect the final containers. macOS checks the icon and
+version inside the mounted, notarized DMG; Windows checks PE icons and versions
+in the NSIS installer, built/installed app and uninstaller. Publication depends
+on both jobs succeeding. JSON evidence is retained as separate CI artifacts;
+public download names stay unchanged. Native verification runs on CI, and
+compiled web assets that cannot be extracted are reported as inaccessible.
+See [packaged verification](docs/releasing.md#packaged-verification).
+
+
 ### CI secret contract
 
 The macOS public release workflow requires these repository secrets:
