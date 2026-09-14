@@ -10,5 +10,5 @@
     "test:branding": "node --test tests/branding.test.cjs",
     "test:release": "node scripts/test-release.cjs"
   },
-  "version": "0.2.1"
+  "version": "0.2.2"
 }

@@ -4,6 +4,12 @@ All notable changes to this project will be documented here. Release automation 
 
 ## Unreleased
 
+## 0.2.2 - 2026-09-14
+
+- Deliver the approved layered-panes icon in the macOS app and DMG volume, and the Windows app, installer, and uninstaller.
+- Fix release checks on Windows CRLF checkouts and add an isolated cross-platform regression.
+- Supersede the unpublished v0.2.1 release attempt without moving its tag; native package checks remain mandatory before publication.
+
 ## 0.2.1 - 2026-09-14
 
 - Ship the approved layered-panes icon in macOS DMG and Windows installers, including the legacy macOS bundle.

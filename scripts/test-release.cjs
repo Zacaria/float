@@ -1,6 +1,6 @@
 const { spawnSync } = require('node:child_process');
 for (const [command, args] of [
-    [process.execPath, ['--test', 'tests/release.test.cjs']],
+    [process.execPath, ['--test', 'tests/release.test.cjs', 'tests/release-line-endings.test.cjs']],
     [process.platform === 'win32' ? 'python' : 'python3', ['scripts/test-packaging.py']],
 ]) {
     const result = spawnSync(command, args, { stdio: 'inherit' });

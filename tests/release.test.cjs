@@ -1,11 +1,11 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
-const read = (p) => readFileSync(p, 'utf8');
+const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 const json = (p) => JSON.parse(read(p));
 
-test('all own versions and live download copy are 0.2.1', () => {
-    const version = '0.2.1';
+test('all own versions and live download copy are 0.2.2', () => {
+    const version = '0.2.2';
     for (const [file, name] of [['Cargo.toml', 'float'], ['Cargo.lock', 'float'], ['src-tauri/Cargo.toml', 'float-tauri'], ['src-tauri/Cargo.lock', 'float-tauri']]) {
         assert.equal(read(file).match(new RegExp(`name = "${name}"\\nversion = "([^"]+)"`))[1], version, file);
     }
@@ -13,8 +13,8 @@ test('all own versions and live download copy are 0.2.1', () => {
     assert.equal(json('package.json').version, version);
     assert.equal(json('package-lock.json').version, version);
     assert.equal(json('package-lock.json').packages[''].version, version);
-    assert.match(read('site/index.html'), /Latest: v0\.2\.1/);
-    assert.match(read('CHANGELOG.md'), /## 0\.2\.1 - \d{4}-\d{2}-\d{2}/);
+    assert.match(read('site/index.html'), /Latest: v0\.2\.2/);
+    assert.match(read('CHANGELOG.md'), /## 0\.2\.2 - \d{4}-\d{2}-\d{2}/);
 });
 
 test('legacy bundle uses canonical approved ICNS', () => {
