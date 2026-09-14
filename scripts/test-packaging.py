@@ -145,6 +145,26 @@ class PackagingTests(unittest.TestCase):
         result = checks.verify_pe(exe)
         self.assertEqual(result['packaged_icon_frame_sha256'], [result['source_icon_frame_sha256']])
 
+    def test_real_msvc_group_preserves_art_with_explicit_color_planes(self):
+        frames = checks.ico_frames(checks.approved('src-tauri/icons/icon.ico'))
+        group = (ROOT / 'tests/fixtures/packaging/msvc-group-icon.bin').read_bytes()
+        resources = {(struct.unpack_from('<H', group, 6 + i * 14 + 12)[0], 1033): payload
+                     for i, (_, payload) in enumerate(frames)}
+        result = checks.verify_group(group, resources, frames, 1033)
+        self.assertEqual(result, [checks.sha(payload) for _, payload in frames])
+        # Only the observed 0 -> 1 plane count is permitted; all artwork and
+        # other directory fields remain strict.
+        for offset, value in [(6, 31), (6 + 4, 2), (6 + 6, 16)]:
+            changed = bytearray(group)
+            changed[offset] = value
+            with self.assertRaises(ValueError):
+                checks.verify_group(bytes(changed), resources, frames, 1033)
+        key = next(iter(resources))
+        changed_resources = dict(resources)
+        changed_resources[key] = resources[key][:-1] + bytes([resources[key][-1] ^ 1])
+        with self.assertRaises(ValueError):
+            checks.verify_group(group, changed_resources, frames, 1033)
+
     def test_pe_parser_rejects_actual_v020_icon(self):
         old = (ROOT / 'tests/fixtures/packaging/v0.2.0-icon.ico').read_bytes()
         exe = self.directory / 'stale.exe'

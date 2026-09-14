@@ -165,6 +165,10 @@ checks in `scripts/verify-packaging.py` must pass before release artifact upload
   assertion failure. Any exposed `dist` assets must match checkout bytes.
 - Windows uses pinned `pefile==2024.8.26` to compare every frame of every icon
   group in the application EXE and final NSIS installer to the approved ICO.
+  PNG image payloads must match byte-for-byte. Only MSVC's observed color-plane
+  field normalization from unspecified `0` to `1` is permitted; dimensions,
+  bit depth, all other metadata, and other plane values remain strict. The real
+  compiled group fixture and negative mutations cover this v0.2.3 correction.
   It silently installs under `RUNNER_TEMP` with no app launch or shortcuts,
   then checks the installed EXE and uninstaller. Installed and built app EXEs
   must be byte-identical; PE file/product versions must match Tauri config.

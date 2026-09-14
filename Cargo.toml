@@ -1,6 +1,6 @@
 [package]
 name = "float"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 description = "Keep reference images visible above your workspace."
 authors = ["Zacaria Chtatar"]

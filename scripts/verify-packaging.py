@@ -87,6 +87,16 @@ def ico_frames(data):
     return frames
 
 
+def icon_frame_key(frame):
+    metadata, payload = frame
+    # MSVC rc.exe writes one color plane for PNG resources even when the ICO
+    # directory leaves it unspecified (0). Do not normalize any other field,
+    # non-PNG resource, or plane value; image bytes must still match exactly.
+    if payload.startswith(b'\x89PNG\r\n\x1a\n') and metadata[4:6] in (b'\x00\x00', b'\x01\x00'):
+        metadata = metadata[:4] + b'\x01\x00' + metadata[6:]
+    return metadata, payload
+
+
 def verify_group(group, resources, source_frames, language):
     require(len(group) >= 6, 'Truncated icon group')
     reserved, kind, count = struct.unpack_from('<HHH', group)
@@ -99,7 +109,7 @@ def verify_group(group, resources, source_frames, language):
         payload = resources.get((resource_id, language))
         require(payload is not None and len(payload) == length, 'Missing/truncated icon resource')
         actual.append((group[offset:offset + 8], payload))
-    if sorted(actual) != sorted(source_frames):
+    if sorted(map(icon_frame_key, actual)) != sorted(map(icon_frame_key, source_frames)):
         details = {
             'language': language,
             'source': [{'metadata': metadata.hex(), 'sha256': sha(payload), 'bytes': len(payload)}

@@ -11,3 +11,17 @@ The tests place the old ICNS in a temporary app bundle and encode the old ICO
 frames in a minimal PE resource section. pefile parses those PE bytes through
 the same reader used for release verification. The fixtures are not runnable
 Windows programs; their tests do not establish native installation or signing.
+
+## Real MSVC icon-group fixture
+
+`msvc-group-icon.bin` is the 90-byte RT_GROUP_ICON entry extracted with pefile
+from the Windows CI executable in run `34846769892`, commit
+`4bf98cc649c5fd92361db49e3d113f327110c3d4` (not a generated mock).
+
+- Executable SHA-256: `ef6bb535dd54473be5c581b4a06923291d764e38cd5f4f69d57b246a925a8a61`
+- Fixture SHA-256: `cfdbc7813628f637d2c54ab7b54b6c6d4a7ba59a7805a118315b1f915a72dddb`
+
+All six embedded PNG resources matched the approved ICO payloads exactly.
+MSVC changed only the directory color-plane field from unspecified `0` to `1`.
+The regression permits that PNG metadata normalization while rejecting changed
+pixels/encoded image bytes, dimensions, bit depth, or any other plane value.

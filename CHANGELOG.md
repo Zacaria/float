@@ -4,6 +4,12 @@ All notable changes to this project will be documented here. Release automation 
 
 ## Unreleased
 
+## 0.2.3 - 2026-09-14
+
+- Ship the approved layered-panes artwork across macOS/Windows apps, disk image, installer, and uninstaller.
+- Accept the Windows compiler's valid PNG color-plane metadata normalization while still requiring exact icon image bytes.
+- Retain real compiled-resource regression evidence; supersede the unpublished v0.2.1 and v0.2.2 attempts without moving their tags.
+
 ## 0.2.2 - 2026-09-14
 
 - Deliver the approved layered-panes icon in the macOS app and DMG volume, and the Windows app, installer, and uninstaller.
